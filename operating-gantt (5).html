@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operating Plan · Gantt</title>
+<style>
+  :root{
+    --lw:440px;            /* label column total width (name + 3 date cols) */
+    --dcol:58px;           /* width of each date column */
+    --row-h:30px; --hdr-h:42px;
+    --ink:#0F172A; --muted:#64748B; --faint:#94A3B8;
+    --line:#EDF1F6; --line2:#E2E8F0;
+    --weekend:#F4F7FB; --card:#FFFFFF; --bg:#EEF2F7; --today:#0F172A;
+    --c-tax:#17BECF; --c-settled:#9467BD; --c-chem:#8C564B; --c-squeak:#1F77B4;
+    --c-glide:#10B981; --c-door:#FF7F0E; --c-card:#E377C2; --c-gen:#7F7F7F; --c-house:#D62728;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:radial-gradient(1200px 600px at 15% -10%, #F7FAFF 0%, rgba(247,250,255,0) 60%), var(--bg);
+    color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.4;
+  }
+  .mono{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  .page{ max-width:1440px; margin:0 auto; padding:34px 28px 54px; }
+
+  .mast{ display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:16px; }
+  .mast h1{ font-size:26px; font-weight:700; letter-spacing:-0.02em; margin:0 0 4px; }
+  .mast .sub{ color:var(--muted); font-size:13.5px; }
+  .mast .asof{ font-size:12px; color:var(--muted); border:1px solid var(--line2); background:var(--card); border-radius:999px; padding:6px 12px; white-space:nowrap; }
+  .mast .asof b{ color:var(--ink); font-weight:600; }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:8px 10px; margin:14px 0 18px; }
+  .chip{ display:flex; align-items:center; gap:8px; border:1px solid var(--line2); background:var(--card); padding:5px 10px 5px 8px; border-radius:8px; font-size:12.5px; }
+  .chip .sw{ width:12px; height:12px; border-radius:3px; flex:0 0 auto; }
+  .chip .nm{ font-weight:600; }
+  .chip .al{ color:var(--faint); font-weight:500; }
+  .chip .ct{ color:var(--muted); font-size:11px; padding-left:2px; }
+
+  .card{ background:var(--card); border:1px solid var(--line2); border-radius:14px; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 30px rgba(15,23,42,.05); overflow:hidden; }
+  .gantt{ min-width:1240px; }
+
+  .ghead{ position:sticky; top:0; z-index:6; display:grid; grid-template-columns:var(--lw) 1fr; background:var(--card); border-bottom:1px solid var(--line2); box-shadow:0 6px 14px -12px rgba(15,23,42,.35); }
+  .ghead-label{ display:grid; grid-template-columns:1fr var(--dcol) var(--dcol) var(--dcol); border-right:1px solid var(--line); }
+  .ghead-label .h-task{ display:flex; align-items:flex-end; padding:10px 12px 8px 14px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600; }
+  .ghead-label .h-date{ display:flex; align-items:flex-end; justify-content:center; text-align:center; padding:0 4px 7px; border-left:1px solid var(--line2); font-size:9.5px; line-height:1.15; letter-spacing:.04em; text-transform:uppercase; color:var(--faint); font-weight:700; }
+  .ghead-label .h-date.hi{ color:#475569; }
+  .ghead-axis{ position:relative; height:56px; }
+  .months{ position:absolute; inset:0 0 auto 0; height:22px; }
+  .month{ position:absolute; top:0; height:22px; display:flex; align-items:center; padding-left:8px; font-size:11px; font-weight:600; color:var(--muted); letter-spacing:.04em; border-left:1px solid var(--line2); }
+  .ticks{ position:absolute; left:0; right:0; top:22px; bottom:0; }
+  .tick{ position:absolute; top:0; bottom:0; }
+  .tick .v{ position:absolute; top:0; bottom:0; width:1px; background:var(--line2); }
+  .tick .t{ position:absolute; top:6px; left:5px; font-size:10.5px; color:var(--muted); white-space:nowrap; }
+
+  .gbody{ display:grid; grid-template-columns:var(--lw) 1fr; }
+  .gcol-labels{ border-right:1px solid var(--line); }
+  .gcol-plot{ position:relative; }
+
+  .grp{ height:var(--hdr-h); display:grid; grid-template-columns:1fr var(--dcol) var(--dcol) var(--dcol); align-items:center; border-bottom:1px solid var(--line); background:linear-gradient(to right, rgba(15,23,42,.015), rgba(15,23,42,0)); }
+  .grp .nmwrap{ display:flex; align-items:center; gap:9px; padding:0 10px; min-width:0; }
+  .grp .bar{ width:4px; height:18px; border-radius:2px; flex:0 0 auto; }
+  .grp .nm{ font-size:13px; font-weight:700; letter-spacing:-0.01em; }
+  .grp .al{ font-size:11px; color:var(--faint); font-weight:500; margin-left:2px; }
+  .grp .ct{ margin-left:auto; font-size:11px; color:var(--muted); background:#F1F5F9; border-radius:999px; padding:2px 8px; }
+  .grp .dcell{ height:100%; border-left:1px solid var(--line2); }
+
+  .tlab{ height:var(--row-h); display:grid; grid-template-columns:1fr var(--dcol) var(--dcol) var(--dcol); align-items:center; border-bottom:1px solid var(--line); }
+  .tlab .nmwrap{ display:flex; align-items:center; gap:8px; padding:0 10px 0 25px; min-width:0; }
+  .tlab .dot{ width:6px; height:6px; border-radius:50%; flex:0 0 auto; opacity:.9; }
+  .tlab .nm{ font-size:12.5px; color:#1E293B; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tlab.uns .nm{ color:var(--faint); }
+  .tlab .tag{ flex:0 0 auto; font-size:9.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--faint); border:1px solid var(--line2); border-radius:4px; padding:1px 5px; }
+  .tlab .dcell{ height:100%; display:flex; align-items:center; justify-content:center; border-left:1px solid var(--line2); font-size:11px; }
+  .tlab .dcell.start{ color:var(--muted); }
+  .tlab .dcell.oe{ color:var(--faint); }
+  .tlab .dcell.ne{ color:var(--ink); font-weight:600; }
+
+  .grp .flag{ margin-left:auto; font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#92400E; background:#FEF3C7; border:1px solid #FCD34D; border-radius:5px; padding:2px 7px; white-space:nowrap; }
+  .tlab .done-tag{ flex:0 0 auto; font-size:9.5px; letter-spacing:.04em; text-transform:uppercase; color:#166534; background:#DCFCE7; border:1px solid #86EFAC; border-radius:4px; padding:1px 6px; }
+  .tlab.done-row .nm{ color:#64748B; }
+  .bar.deferred{ opacity:.4; background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.5) 0 4px, rgba(255,255,255,0) 4px 9px); }
+  .bar.done::after{ content:"\2713"; position:absolute; right:3px; top:50%; transform:translateY(-50%); font-size:10px; font-weight:800; color:#fff; }
+  .tlab .dcell.prog{ color:#1D4ED8; font-style:italic; font-weight:600; font-size:9px; }
+  .bar.inprogress::after{ content:""; position:absolute; inset:0; border-radius:5px; background:linear-gradient(to right, rgba(255,255,255,0) 48%, rgba(255,255,255,.92) 100%); }
+  .tlab .dcell.tbdv{ color:#94A3B8; font-style:italic; font-weight:600; font-size:9.5px; }
+  .bg{ position:absolute; inset:0; z-index:0; pointer-events:none; }
+  .band{ position:absolute; top:0; bottom:0; background:var(--weekend); }
+  .grid{ position:absolute; top:0; bottom:0; width:1px; background:var(--line); }
+  .grid.month{ background:var(--line2); }
+  .today{ position:absolute; top:0; bottom:0; width:0; border-left:1.5px dashed var(--today); z-index:3; }
+  .today .pill{ position:absolute; top:6px; left:0; transform:translateX(-50%); background:var(--today); color:#fff; font-size:10px; font-weight:600; padding:2px 7px; border-radius:999px; white-space:nowrap; }
+  .brk{ position:absolute; top:0; bottom:0; }
+  .brk .hatch{ position:absolute; top:0; bottom:0; background:repeating-linear-gradient(135deg, rgba(148,163,184,.18) 0 5px, rgba(148,163,184,0) 5px 10px); border-left:1px dashed var(--line2); border-right:1px dashed var(--line2); }
+  .brk .lbl{ position:absolute; top:4px; transform:translateX(-50%); font-size:10px; color:var(--faint); white-space:nowrap; }
+
+  .rows{ position:relative; z-index:1; }
+  .rspace{ height:var(--hdr-h); border-bottom:1px solid var(--line); }
+  .rspace .sep{ height:100%; border-top:2px solid rgba(15,23,42,.05); }
+  .prow{ position:relative; height:var(--row-h); border-bottom:1px solid var(--line); }
+
+  .barwrap{ position:absolute; top:50%; transform:translateY(-50%); height:15px; min-width:7px; }
+  .bar{ position:absolute; inset:0; border-radius:5px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.18), 0 1px 2px rgba(15,23,42,.14); transition:filter .12s ease, transform .12s ease; }
+  .bar.striped::after{ content:""; position:absolute; inset:0; border-radius:5px; background:repeating-linear-gradient(135deg, rgba(255,255,255,.45) 0 4px, rgba(255,255,255,0) 4px 9px); mix-blend-mode:overlay; }
+  .bar.far{ background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.35) 0 4px, rgba(255,255,255,0) 4px 9px); }
+  .barwrap:hover .bar{ filter:brightness(1.07); transform:scale(1.01); cursor:default; }
+
+  .uns-pill{ position:absolute; top:50%; left:6px; transform:translateY(-50%); font-size:10.5px; color:var(--faint); border:1px dashed var(--line2); border-radius:5px; padding:2px 8px; background:#FBFCFE; }
+
+  #tip{ position:fixed; z-index:50; pointer-events:none; opacity:0; transition:opacity .1s ease; background:#0B1220; color:#E8EEF7; border:1px solid rgba(255,255,255,.08); border-radius:9px; padding:9px 11px; max-width:300px; box-shadow:0 10px 30px rgba(2,6,23,.4); font-size:12px; }
+  #tip .tn{ font-weight:700; margin-bottom:3px; }
+  #tip .tr{ color:#9FB0C7; }
+  #tip .tr b{ color:#E8EEF7; font-weight:600; }
+  #tip .tnote{ margin-top:5px; color:#C4B5FD; font-style:italic; }
+
+  .notes{ margin-top:16px; font-size:12px; color:var(--muted); line-height:1.55; }
+  .notes b{ color:#334155; }
+  .notes .k{ display:inline-flex; align-items:center; gap:6px; margin-right:14px; }
+  .notes .kb{ width:18px; height:9px; border-radius:3px; background:#94A3B8; display:inline-block; }
+  .notes .kt{ width:0; height:13px; border-left:1.5px dashed var(--today); display:inline-block; }
+
+  @media (max-width:760px){ .page{ padding:20px 12px 40px; } .mast h1{ font-size:22px; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="mast">
+    <div>
+      <h1>Operating Plan</h1>
+      <div class="sub">Bars run from start date to the new end date. Each business is sorted by new end date.</div>
+    </div>
+    <div class="asof">As of <b>June 29, 2026</b> · window Jun 8 to Aug 1</div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="card">
+    <div class="gantt">
+      <div class="ghead">
+        <div class="ghead-label">
+          <div class="h-task">Workstream / Task</div>
+          <div class="h-date">Start</div>
+          <div class="h-date">Original<br>end</div>
+          <div class="h-date hi">New<br>end</div>
+        </div>
+        <div class="ghead-axis">
+          <div class="months" id="months"></div>
+          <div class="ticks" id="ticks"></div>
+        </div>
+      </div>
+      <div class="gbody">
+        <div class="gcol-labels" id="labels"></div>
+        <div class="gcol-plot">
+          <div class="bg" id="bg"></div>
+          <div class="rows" id="rows"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes" id="notes"></div>
+</div>
+
+<div id="tip"></div>
+
+<script>
+(function(){
+  "use strict";
+  var MS=86400000;
+  function D(s){ if(!s) return null; var p=s.split("-").map(Number); return new Date(p[0],p[1]-1,p[2]); }
+  var RS=D("2026-06-08"), RE=D("2026-08-01");
+  var MAIN_W=86, FAR_X=95, TODAY=D("2026-06-29");
+  function pos(dt){ if(!dt) return null; if(dt>RE) return FAR_X; var f=(dt-RS)/(RE-RS); if(f<0)f=0; if(f>1)f=1; return f*MAIN_W; }
+  var MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function fmt(d){ return MON[d.getMonth()]+" "+String(d.getDate()).padStart(2,"0")+", "+d.getFullYear(); }
+  function fmtShort(d){ return MON[d.getMonth()]+" "+d.getDate(); }
+
+  var cats=[
+    {name:"Tax Abatement",    alias:"Verity",  color:"var(--c-tax)", flag:"REVISITED POST JAPAN"},
+    {name:"Settled Tax",      alias:"",        color:"var(--c-settled)"},
+    {name:"Chemicals",        alias:"",        color:"var(--c-chem)"},
+    {name:"Squeaky Clean",    alias:"",        color:"var(--c-squeak)"},
+    {name:"Glide Tax",        alias:"",        color:"var(--c-glide)"},
+    {name:"Doorstep",         alias:"",        color:"var(--c-door)"},
+    {name:"Prophet", alias:"", color:"var(--c-card)"},
+    {name:"General",          alias:"",        color:"var(--c-gen)"},
+    {name:"House",            alias:"",        color:"var(--c-house)"}
+  ];
+
+  // oe = original end, ne = new end, dur = duration. start = (oe || ne) - dur.
+  // "new:true" = task added now (no original end; defaults to 1-day bar).
+  var tasks=[
+    {cat:"Tax Abatement", name:"Website",                    oe:"2026-06-15", ne:"2026-06-22", dur:1},
+    {cat:"Tax Abatement", name:"Insurance",                  oe:"2026-06-19", ne:"2026-06-26", dur:5},
+    {cat:"Tax Abatement", name:"Launch",                     oe:"2026-06-20", ne:"2026-06-20", dur:1},
+    {cat:"Tax Abatement", name:"First PTIN Exam (Jatin)",         oe:"2026-06-26", ne:"2026-07-17", dur:7},
+    {cat:"Tax Abatement", name:"First PTIN Exam (Aarav)",         oe:"2026-10-01", ne:"2026-10-01", dur:30, far:true},
+
+    {cat:"Settled Tax",   name:"Settled Insurance",          oe:"2026-06-18", ne:"2026-07-02", dur:1},
+    {cat:"Settled Tax",   name:"Launch",                     oe:"2026-06-19", ne:"2026-07-02", dur:1},
+
+    {cat:"Chemicals",     name:"Send 5 other India vendors (+2 China) samples", ne:"2026-07-02", dur:5},
+    {cat:"Chemicals",     name:"Get test batch",             oe:"2026-07-03", ne:"2026-07-03", dur:25},
+    {cat:"Chemicals",     name:"Receive 5 reverse engineered samples + improved versions", ne:"2026-07-15", dur:1, new:true},
+    {cat:"Chemicals",     name:"Get quotes for concentrates", ne:"2026-07-15", dur:1, new:true},
+
+    {cat:"Squeaky Clean", name:"Regulations and Accounting",                ne:"2026-06-24", dur:1, done:true},
+    {cat:"Squeaky Clean", name:"Tire Shiner Quote Agreed",   oe:"2026-06-19", ne:"2026-07-03", dur:1},
+    {cat:"Squeaky Clean", name:"5 five-star reviews a day",  oe:"2026-06-22", ne:"2026-06-22", dur:6, inProgress:true},
+    {cat:"Squeaky Clean", name:"Plastic Installed",          oe:"2026-06-25", ne:"2026-07-02", dur:4},
+    {cat:"Squeaky Clean", name:"3 online memberships a day", oe:"2026-06-26", ne:"2026-06-30", dur:15},
+    {cat:"Squeaky Clean", name:"Store Quote Agreed",         oe:"2026-06-29", ne:"2026-07-06", dur:10},
+
+    {cat:"Glide Tax",     name:"Glide Insurance",            oe:"2026-06-17", ne:"2026-06-26", dur:1, done:true},
+    {cat:"Glide Tax",     name:"Launch",       oe:"2026-06-18", ne:"2026-06-26", dur:1, done:true},
+    {cat:"Glide Tax",     name:"Stock support",              oe:"2026-06-20", ne:"2026-06-30", dur:2},
+    {cat:"Glide Tax",     name:"Trade reports / analysis",   oe:"2026-06-21", ne:"2026-07-01", dur:1},
+    {cat:"Glide Tax",     name:"Tax loss optimization",      oe:"2026-06-22", ne:"2026-07-02", dur:1},
+    {cat:"Glide Tax",     name:"HYPE support",               oe:"2026-06-25", ne:"2026-07-03", dur:2},
+    {cat:"Glide Tax",     name:"Dashboard / analytics page", oe:"2026-06-27", ne:"2026-07-02", dur:2},
+
+    {cat:"Doorstep",      name:"Resume Rugtomize",           oe:"2026-06-19", ne:"2026-07-01", dur:4},
+    {cat:"Doorstep",      name:"Start Penny Boys",           oe:"2026-06-19", ne:"2026-07-01", dur:4},
+    {cat:"Doorstep",      name:"Start HiStrips",             oe:"2026-06-19", ne:"2026-07-01", dur:4},
+    {cat:"Doorstep",      name:"Start Health Y Sol",         oe:"2026-06-30", ne:"2026-07-07", dur:7},
+    {cat:"Doorstep",      name:"Start Parmint",              oe:"2026-06-30", ne:"2026-07-07", dur:7},
+    {cat:"Doorstep",      name:"Start Oracle Gifts",         oe:"2026-06-30", ne:null, dur:4, tbd:true},
+
+    {cat:"Prophet", name:"Website",                 ne:"2026-06-23", dur:1, done:true},
+    {cat:"Prophet", name:"App store submission",    ne:"2026-06-23", dur:1, done:true},
+    {cat:"Prophet", name:"Apply to eBay (second application)", ne:"2026-07-01", dur:1, new:true},
+    {cat:"Prophet", name:"App feature development",   ne:"2026-06-26", dur:1, done:true},
+    {cat:"Prophet", name:"Insurance",               oe:"2026-06-19", ne:"2026-07-01", dur:4},
+    {cat:"Prophet", name:"Marketplace Scraping",    oe:"2026-06-26", ne:null, dur:4, tag:"delayed", striped:true, note:"Delayed", tbd:true},
+
+    {cat:"General",       name:"Speaking Clearly + Persuasive", oe:"2026-06-17", ne:"2026-07-02", dur:1},
+    {cat:"General",       name:"Baba CPAP",                  oe:"2026-06-17", ne:"2026-07-02", dur:1},
+    {cat:"General",       name:"London Lawyer Retained",     oe:"2026-06-18", ne:"2026-06-30", dur:2},
+    {cat:"General",       name:"Handwriting",                 ne:"2026-07-23", dur:1, new:true},
+
+    {cat:"House",         name:"Clean Baba's Room",          oe:"2026-06-20", ne:"2026-07-04", dur:2},
+    {cat:"House",         name:"Clean Backyard",             oe:"2026-06-20", ne:"2026-07-04", dur:2},
+    {cat:"House",         name:"Clean Basement",             oe:"2026-06-21", ne:"2026-07-05", dur:2},
+    {cat:"House",         name:"Decide curtain options",                   ne:"2026-07-02", dur:1, new:true},
+    {cat:"House",         name:"Room redesign",              ne:"2026-07-30", dur:1, new:true},
+    {cat:"House",         name:"Baba Bathroom Installation", oe:null, ne:"2026-08-01", dur:1, new:true, note:"Talk to Mommy first"},
+    {cat:"House",         name:"Basement Office Renovation", oe:null, ne:"2026-08-01", dur:1, new:true, note:"Talk to Mommy first"}
+  ];
+
+  function oeD(t){ return t.oe?D(t.oe):null; }
+  function neD(t){ return t.ne?D(t.ne):null; }
+  function startD(t){ var a=oeD(t)||neD(t); if(!a||t.dur==null) return null; return new Date(a.getTime()-t.dur*MS); }
+
+  function el(tag,cls,txt){ var n=document.createElement(tag); if(cls)n.className=cls; if(txt!=null)n.textContent=txt; return n; }
+
+  // Legend
+  var legend=document.getElementById("legend");
+  cats.forEach(function(c){
+    var n=tasks.filter(function(t){return t.cat===c.name;}).length;
+    var chip=el("div","chip");
+    var sw=el("span","sw"); sw.style.background=c.color; chip.appendChild(sw);
+    chip.appendChild(el("span","nm",c.name));
+    if(c.alias) chip.appendChild(el("span","al","· "+c.alias));
+    chip.appendChild(el("span","ct mono",n));
+    legend.appendChild(chip);
+  });
+
+  // Months
+  var months=document.getElementById("months");
+  function monthSeg(label,a,b){ var l=pos(a),r=pos(b); var s=el("div","month",label); s.style.left=l+"%"; s.style.width=(r-l)+"%"; months.appendChild(s); }
+  monthSeg("June", D("2026-06-08"), D("2026-07-01"));
+  monthSeg("July", D("2026-07-01"), D("2026-08-01"));
+
+  // Ticks (Mondays)
+  var ticks=document.getElementById("ticks");
+  function addTick(dt){ var x=pos(dt); var t=el("div","tick"); t.style.left=x+"%"; t.appendChild(el("div","v")); t.appendChild(el("div","t mono",MON[dt.getMonth()]+" "+dt.getDate())); ticks.appendChild(t); }
+  var totalDays=Math.round((RE-RS)/MS);
+  for(var dd=0; dd<=totalDays; dd++){ var dt=new Date(RS.getTime()+dd*MS); if(dt.getDay()===1) addTick(dt); }
+
+  // Background
+  var bg=document.getElementById("bg");
+  for(var d=0; d<totalDays; d++){ var day=new Date(RS.getTime()+d*MS); var wd=day.getDay(); if(wd===0||wd===6){ var l=pos(day); var r=Math.min(pos(new Date(day.getTime()+MS)),MAIN_W); var b=el("div","band"); b.style.left=l+"%"; b.style.width=(r-l)+"%"; bg.appendChild(b); } }
+  function gridAt(dt,isMonth){ var g=el("div",isMonth?"grid month":"grid"); g.style.left=pos(dt)+"%"; bg.appendChild(g); }
+  for(var g2=0; g2<=totalDays; g2++){ var gd=new Date(RS.getTime()+g2*MS); if(gd.getDay()===1) gridAt(gd,false); }
+  gridAt(D("2026-07-01"),true);
+  var brk=el("div","brk"); var hatch=el("div","hatch"); hatch.style.left=(MAIN_W+1)+"%"; hatch.style.width="3%"; brk.appendChild(hatch);
+  var bl=el("div","lbl","Later"); bl.style.left=(MAIN_W+2.5)+"%"; brk.appendChild(bl); bg.appendChild(brk);
+  var tdy=el("div","today"); tdy.style.left=pos(TODAY)+"%"; tdy.appendChild(el("div","pill","Today")); bg.appendChild(tdy);
+
+  // Rows + labels (sorted within each business by new end date; unscheduled last)
+  var labels=document.getElementById("labels");
+  var rows=document.getElementById("rows");
+
+  cats.forEach(function(c){
+    var items=tasks.filter(function(t){return t.cat===c.name;});
+    var sched=items.filter(function(t){return !t.uns && neD(t);});
+    var uns=items.filter(function(t){return t.uns || !neD(t);});
+    sched.sort(function(a,b){ return neD(a)-neD(b); });
+    var ordered=sched.concat(uns);
+
+    var grp=el("div","grp");
+    var nw=el("div","nmwrap");
+    var gbar=el("div","bar"); gbar.style.background=c.color; nw.appendChild(gbar);
+    nw.appendChild(el("span","nm",c.name));
+    if(c.alias && !c.flag) nw.appendChild(el("span","al","· "+c.alias));
+    if(c.flag) nw.appendChild(el("span","flag",c.flag));
+    else nw.appendChild(el("span","ct mono",items.length));
+    grp.appendChild(nw);
+    grp.appendChild(el("div","dcell")); grp.appendChild(el("div","dcell")); grp.appendChild(el("div","dcell"));
+    labels.appendChild(grp);
+
+    var sp=el("div","rspace"); sp.appendChild(el("div","sep")); rows.appendChild(sp);
+
+    ordered.forEach(function(t){
+      var sd=startD(t), oe=oeD(t), ne=neD(t);
+
+      var tl=el("div","tlab"+((t.uns||t.tbd)?" uns":"")+(t.done?" done-row":""));
+      var nm=el("div","nmwrap");
+      var dot=el("span","dot"); dot.style.background=c.color; nm.appendChild(dot);
+      nm.appendChild(el("span","nm",t.name));
+      if(t.tag) nm.appendChild(el("span","tag",t.tag));
+      if(t.uns) nm.appendChild(el("span","tag","tbd"));
+      if(t.done) nm.appendChild(el("span","done-tag","\u2713 Done"));
+      tl.appendChild(nm);
+
+      var sc=el("div","dcell mono start"); sc.textContent=(sd && !t.tbd)?fmtShort(sd):"—";
+      var oc=el("div","dcell mono oe");    oc.textContent=oe?fmtShort(oe):"—";
+      var nc; if(t.inProgress){ nc=el("div","dcell ne prog"); nc.textContent="In progress"; } else if(t.tbd){ nc=el("div","dcell ne tbdv"); nc.textContent="TBD"; } else { nc=el("div","dcell mono ne"); nc.textContent=ne?fmtShort(ne):"—"; }
+      tl.appendChild(sc); tl.appendChild(oc); tl.appendChild(nc);
+      tl.title=t.name;
+      labels.appendChild(tl);
+
+      var pr=el("div","prow");
+      if(t.uns || t.tbd){
+        var up=el("div","uns-pill", t.tbd?"TBD":"Unscheduled"); pr.appendChild(up); attachTip(up,t,c);
+      } else if(t.far){
+        var bwf=el("div","barwrap"); bwf.style.left="91%"; bwf.style.width="7%";
+        var barf=el("div","bar far"+(c.flag?" deferred":"")); barf.style.background=c.color; bwf.appendChild(barf);
+        pr.appendChild(bwf); attachTip(bwf,t,c);
+      } else if(t.inProgress){
+        var l=pos(sd), r=pos(TODAY); var w=Math.max(r-l, 1.0);
+        var bw=el("div","barwrap"); bw.style.left=l+"%"; bw.style.width=w+"%";
+        var bar=el("div","bar inprogress"); bar.style.background=c.color;
+        bw.appendChild(bar); pr.appendChild(bw); attachTip(bw,t,c);
+      } else {
+        var l=pos(sd), r=pos(ne); var w=Math.max(r-l, 1.0);
+        var bw=el("div","barwrap"); bw.style.left=l+"%"; bw.style.width=w+"%";
+        var bar=el("div","bar"+(t.striped?" striped":"")+(c.flag?" deferred":"")+(t.done?" done":"")); bar.style.background=c.color;
+        bw.appendChild(bar); pr.appendChild(bw); attachTip(bw,t,c);
+      }
+      rows.appendChild(pr);
+    });
+  });
+
+  // Tooltip
+  var tip=document.getElementById("tip");
+  function attachTip(node,t,c){
+    node.addEventListener("mouseenter",function(){
+      tip.innerHTML="";
+      tip.appendChild(el("div","tn",t.name));
+      var meta=el("div","tr"); meta.textContent=c.name+(c.alias?" · "+c.alias:""); tip.appendChild(meta);
+      if(t.uns){
+        var u=el("div","tr"); u.innerHTML="Schedule: <b>not set</b>"; tip.appendChild(u);
+      } else {
+        var sd=startD(t), oe=oeD(t), ne=neD(t);
+        var a=el("div","tr"); a.innerHTML="Start: <b>"+(t.tbd?"—":fmt(sd))+"</b>"; tip.appendChild(a);
+        var o=el("div","tr"); o.innerHTML="Original end: <b>"+(oe?fmt(oe):"not set (new task)")+"</b>"; tip.appendChild(o);
+        var n=el("div","tr"); n.innerHTML="New end: <b>"+(t.inProgress?"In progress":(t.tbd?"TBD":fmt(ne)))+"</b>"; tip.appendChild(n);
+        var dur=el("div","tr"); dur.innerHTML="Duration: <b>"+t.dur+" day"+(t.dur===1?"":"s")+"</b>"+(t.new?" (default)":""); tip.appendChild(dur);
+        if(t.far){ var f=el("div","tr"); f.textContent="Shown past the axis break (compressed)"; tip.appendChild(f); }
+      }
+      if(t.note) tip.appendChild(el("div","tnote",t.note));
+      show();
+    });
+    node.addEventListener("mousemove",show);
+    node.addEventListener("mouseleave",function(){ tip.style.opacity=0; });
+    function show(e){
+      var ev=e||window.event||lastMove;
+      var x=(ev&&ev.clientX!=null)?ev.clientX:window.innerWidth/2;
+      var y=(ev&&ev.clientY!=null)?ev.clientY:80;
+      var tw=tip.offsetWidth||220, th=tip.offsetHeight||60;
+      var left=x+14, top=y+16;
+      if(left+tw>window.innerWidth-8) left=x-tw-14;
+      if(top+th>window.innerHeight-8) top=y-th-14;
+      tip.style.left=left+"px"; tip.style.top=top+"px"; tip.style.opacity=1;
+    }
+  }
+  var lastMove=null; window.addEventListener("mousemove",function(e){ lastMove=e; });
+
+  // Footnotes
+  document.getElementById("notes").innerHTML =
+    '<div style="margin-bottom:8px">' +
+      '<span class="k"><span class="kb"></span> Bar spans start to new end (start = original end minus duration).</span>' +
+      '<span class="k"><span class="kt"></span> Dashed line is today, June 29, 2026.</span>' +
+    '</div>' +
+    'Three date columns: <b>Start</b>, <b>Original end</b> (prior plan), and <b>New end</b> (current, drives the bars). Tasks within each business are sorted by new end date; weekends are shaded. ' +
+    '<b>Tax Abatement</b> is flagged to be revisited after the Japan trip; its bars are dimmed and hatched. Completed items (Prophet Website, App store submission, Squeaky Regulations and Accounting, Glide Insurance, Glide Launch, App feature development) carry a green Done tag. 5 five-star reviews a day is in progress, so its bar runs to today and fades open. Oracle Gifts and Marketplace Scraping are marked TBD (no date set) with a TBD chip. ' +
+    '<b>First PTIN Exam (Aarav)</b> runs Sep 1 to Oct 1 and is shown as a hatched bar past the axis break. ' +
+    'Tasks given a date but no duration (General Handwriting, the Chemicals receive-samples and concentrate-quotes items, the second eBay application, and House Decide curtain options, Room redesign, Baba Bathroom Installation and Basement Office Renovation) default to 1-day bars; send durations to lengthen them. ' +
+    'Hover any bar for start, original end, new end, and duration.';
+})();
+</script>
+</body>
+</html>
