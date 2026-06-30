@@ -108,7 +108,16 @@ export default async function middleware(request) {
     return next({ headers: { 'Set-Cookie': setCookie(token) } });
   }
 
-  // Not authenticated → show the password prompt.
+  // Not authenticated. For API calls, return a clean JSON 401 so the app can
+  // detect an expired session (instead of trying to parse the login HTML page).
+  if (url.pathname.startsWith('/api')) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    });
+  }
+
+  // Otherwise show the human-friendly password prompt.
   return loginPage(200, '');
 }
 

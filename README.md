@@ -1,36 +1,59 @@
 # Operating Plan · Gantt
 
-A single self-contained HTML Gantt chart (`index.html`), hosted on Vercel behind
-a casual shared-password gate.
+An interactive, editable Gantt chart of the operating plan, hosted on Vercel
+behind a shared-password gate. No build step — plain HTML/CSS/ES-modules.
 
-## How the password gate works
+## What it does
 
-`middleware.js` runs on Vercel **before** any page is served. It shows a password
-screen to anyone without a valid cookie, and serves the chart to anyone who has
-entered the code. A correct code sets a "remember this device" cookie that lasts
-**1 year** and slides forward on every visit, so people aren't re-prompted.
+- **Tabs** — an **All** view plus one tab per business. On All, click a legend
+  chip to hide/show a whole business, or a row's ✕ to hide one task. (Hiding is
+  per-device.)
+- **Edit anything** — click a bar/row or the ✎ pencil to edit a task; **+ Add
+  task** to create one; the **Businesses** button to add/rename/recolour/reorder/
+  delete businesses. Changes save instantly.
+- **Live clock** — the "As of" stamp and the dashed *today* line follow live
+  **US-Eastern** time (`America/New_York`, DST-aware). The time window auto-fits
+  whatever is visible.
+- **Refined UI** — subtle motion, hover states, and quiet synthesized audio
+  (mute toggle, top-right; remembered per device).
 
-The password is **never stored in this repo**. It lives in two Vercel
-environment variables:
+## Architecture
 
-| Variable        | Value                          | Notes                                              |
-| --------------- | ------------------------------ | -------------------------------------------------- |
-| `GATE_PASSWORD` | the access code (e.g. `2075`)  | what people type on the login screen               |
-| `GATE_SECRET`   | a long random string           | signs the login cookie; generate with `openssl rand -hex 32` |
+| File            | Role                                                            |
+| --------------- | --------------------------------------------------------------- |
+| `index.html`    | Page shell                                                      |
+| `app.css`       | Styles                                                          |
+| `data.js`       | Seed plan (used first run / when the store is empty)            |
+| `app.js`        | State, render, editing, clock, sound, persistence               |
+| `api/plan.js`   | Cloud store endpoint (`GET` load / `POST` save)                 |
+| `middleware.js` | Password gate (covers pages **and** `/api`)                     |
 
-> Environment-variable changes are not retroactive — **redeploy** after changing them.
+## Persistence
 
-This is a light gate to keep random visitors out, not strong authentication.
-Anyone given the code can share it, and the chart is fully readable once unlocked.
-To raise the bar, use a longer `GATE_PASSWORD`. To log every device out, change
-`GATE_SECRET` and redeploy.
+Edits always save to **localStorage** instantly, and to a shared **cloud store**
+when one is connected — so the app works immediately, and "lights up" shared sync
+once the store exists. The status pill (top-right) shows **On this device**,
+**Saving…**, or **Synced**.
 
-## Local note
+### Turn on shared cloud sync (one-time, free)
 
-`package.json` exists only so Vercel installs the middleware helper
-(`@vercel/functions`). There is no build step — the site is static.
+1. Vercel → this project → **Storage** tab → **Upstash Redis** → **Free** plan →
+   **Connect** to this project. This auto-injects `KV_REST_API_URL` and
+   `KV_REST_API_TOKEN` — no key copying.
+2. **Redeploy** (Deployments → ⋯ → Redeploy, or push any commit).
+
+After that, everyone with the password sees the same plan from any device; the
+Redis token stays server-side (the browser only ever talks to `/api/plan`).
+Conflicts are last-write-wins; a tab refreshes from the cloud when you return to
+it. Until you connect it, edits are simply per-device.
+
+## Password gate
+
+`GATE_PASSWORD` (the access code) and `GATE_SECRET` (signs the login cookie) live
+in Vercel env vars — never in the repo. The cookie remembers a device for 1 year.
+This is a light gate to keep out casual visitors, not strong authentication.
 
 ## Deploy
 
-Connected to Vercel via the GitHub repo: every push to `main` auto-deploys to
-production. Framework Preset is **Other**, no build command, output is the repo root.
+Connected to Vercel via GitHub: every push to `main` auto-deploys to production.
+Framework Preset **Other**, no build command.
