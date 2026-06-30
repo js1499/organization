@@ -515,8 +515,11 @@ async function load() {
   } catch (e) { /* offline → local */ }
 
   if (cloud) { state = cloud; cloudOK = true; saveLS(); setSync('synced'); }
-  else if (configured) { state = seedPlan(); cloudOK = true; saveLS(); setSync('saving'); pushCloud(); }
-  else { state = loadLS() || seedPlan(); cloudOK = false; saveLS(); setSync('local'); }
+  else if (configured) {
+    // Cloud is connected but empty: seed it from this device's existing work
+    // (so edits made before connecting the cloud aren't lost), else the default.
+    state = loadLS() || seedPlan(); cloudOK = true; saveLS(); setSync('saving'); pushCloud();
+  } else { state = loadLS() || seedPlan(); cloudOK = false; saveLS(); setSync('local'); }
 
   render({ animate: true });
   startClock();
