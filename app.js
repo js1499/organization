@@ -227,6 +227,10 @@ function renderTabs() {
 }
 
 function renderLegend() {
+  // The legend toggles whole businesses, which only applies to the All view.
+  // On an individual business tab it's redundant, so hide it.
+  if (view.tab !== 'all') { D.legend.style.display = 'none'; D.legend.innerHTML = ''; return; }
+  D.legend.style.display = '';
   D.legend.innerHTML = '';
   state.categories.forEach((c) => {
     const n = state.tasks.filter((t) => t.cat === c.id).length;
@@ -243,7 +247,11 @@ function renderLegend() {
 }
 
 function renderHiddenNote() {
-  const hc = view.hiddenCats.size, ht = view.hiddenTasks.size;
+  const onAll = view.tab === 'all';
+  // Hidden businesses only matter on the All view; hidden tasks are counted
+  // within the active business when on an individual tab.
+  const hc = onAll ? view.hiddenCats.size : 0;
+  const ht = onAll ? view.hiddenTasks.size : state.tasks.filter((t) => t.cat === view.tab && view.hiddenTasks.has(t.id)).length;
   if (!hc && !ht) { D.hiddenNote.innerHTML = ''; return; }
   const parts = [];
   if (hc) parts.push(hc + ' business' + (hc > 1 ? 'es' : ''));
