@@ -153,8 +153,8 @@ function render(opts = {}) {
     if (c.alias && !c.flag) nw.appendChild(el('span', 'al', '· ' + c.alias));
     if (c.flag) nw.appendChild(el('span', 'flag', c.flag));
     else nw.appendChild(el('span', 'ct mono', String(tasksOf(c.id).length)));
-    const add = el('button', 'gadd', '+'); add.title = 'Add task to ' + c.name;
-    add.onclick = () => { Sound.open(); openTaskEditor(null, c.id); };
+    const add = el('button', 'gadd', '+'); add.title = 'Add task to ' + c.name; add.type = 'button';
+    add.onclick = (e) => { e.stopPropagation(); Sound.open(); openTaskEditor(null, c.id); };
     nw.appendChild(add);
     grp.appendChild(nw);
     for (let k = 0; k < 3; k++) grp.appendChild(el('div', 'dcell'));

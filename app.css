@@ -122,9 +122,10 @@ body{
 .grp .al{ font-size:10.5px; color:var(--faint); font-weight:500; }
 .grp .ct{ font-size:10.5px; color:var(--muted); background:var(--line3); border-radius:999px; padding:2px 8px; }
 .grp .flag{ font-size:8.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#92400E; background:#FEF3C7; border:1px solid #FCD34D; border-radius:5px; padding:2px 6px; white-space:nowrap; }
-.grp .gadd{ margin-left:auto; opacity:0; border:0; background:transparent; color:var(--faint); cursor:pointer; font-size:15px; line-height:1; padding:2px 6px; border-radius:6px; transition:opacity .15s, color .15s, background .15s; }
+.grp .gadd{ margin-left:auto; flex:0 0 auto; opacity:.5; border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:17px; line-height:1; width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:7px; transition:opacity .15s, color .15s, background .15s; }
 .grp:hover .gadd{ opacity:1; }
 .grp .gadd:hover{ color:var(--ink); background:var(--line3); }
+.grp .flag{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .grp .dcell{ height:100%; border-left:1px solid var(--line2); }
 
 .tlab{ height:var(--row-h); display:grid; grid-template-columns:1fr var(--dcol) var(--dcol) var(--dcol); align-items:center; border-bottom:1px solid var(--line); transition:background .14s; }
