@@ -168,6 +168,17 @@ body{
 .barwrap:hover .bar{ filter:brightness(1.07); transform:scaleY(1.12); }
 .bar.striped::after{ content:""; position:absolute; inset:0; border-radius:5px; background:repeating-linear-gradient(135deg, rgba(255,255,255,.45) 0 4px, rgba(255,255,255,0) 4px 9px); mix-blend-mode:overlay; }
 .bar.deferred{ opacity:.45; background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.5) 0 4px, rgba(255,255,255,0) 4px 9px); }
+
+/* Postponed — prominent amber treatment, carried across the whole row & its
+   date columns so a postponement is unmistakable. */
+.grp.postponed{ background:linear-gradient(to right, rgba(217,119,6,.12), rgba(217,119,6,.02)); box-shadow:inset 3px 0 0 #D97706; }
+.pp-badge{ flex:0 0 auto; font-size:9px; font-weight:800; letter-spacing:.05em; color:#fff; background:#D97706; border-radius:5px; padding:2px 7px; white-space:nowrap; box-shadow:0 1px 2px rgba(217,119,6,.4); }
+.tlab.postponed{ background:linear-gradient(to right, rgba(217,119,6,.08), rgba(217,119,6,0)); box-shadow:inset 3px 0 0 #F59E0B; }
+.tlab.postponed .dcell{ background:rgba(217,119,6,.06); }
+.tlab.postponed .nm{ color:#7C2D12; }
+.pp-tag{ flex:0 0 auto; font-size:9px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:#92400E; background:#FEF3C7; border:1px solid #F59E0B; border-radius:4px; padding:1px 5px; }
+.prow.postponed .bar{ opacity:.72; box-shadow:0 0 0 1.5px #F59E0B; }
+.prow.postponed .uns-pill{ color:#92400E; background:#FEF3C7; border-color:#F59E0B; }
 .bar.done::after{ content:"\2713"; position:absolute; right:3px; top:50%; transform:translateY(-50%); font-size:10px; font-weight:800; color:#fff; }
 .bar.inprogress::after{ content:""; position:absolute; inset:0; border-radius:5px; background:linear-gradient(to right, rgba(255,255,255,0) 46%, rgba(255,255,255,.92) 100%); }
 .uns-pill{ position:absolute; top:50%; left:8px; transform:translateY(-50%); font-size:10px; color:var(--faint); border:1px dashed var(--line2); border-radius:5px; padding:2px 9px; background:#FBFCFE; z-index:1; cursor:pointer; white-space:nowrap; }

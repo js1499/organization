@@ -40,6 +40,11 @@ function endOf(t) { return parse(t.ne) || parse(t.oe); }
 function startOf(t) { const a = parse(t.oe) || parse(t.ne); if (!a || t.dur == null) return a; return new Date(a.getTime() - t.dur * MS); }
 function isUnscheduled(t) { return t.status === 'tbd' || !endOf(t); }
 
+// "Postponed" markers: a category carries a flag (e.g. Tax's "REVISITED POST
+// JAPAN"), or a task is explicitly striped / tagged delayed|postponed|deferred.
+function catPostponed(c) { return !!(c && c.flag); }
+function taskPostponed(t) { return !!(t.striped || /delay|postpon|defer/i.test((t.tag || '') + ' ' + (t.note || ''))); }
+
 function etNow() {
   const now = new Date();
   const dp = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
@@ -146,12 +151,13 @@ function render(opts = {}) {
   }
   for (const c of cats) {
     // group label
-    const grp = el('div', 'grp');
+    const cpp = catPostponed(c);
+    const grp = el('div', 'grp' + (cpp ? ' postponed' : ''));
     const nw = el('div', 'nmwrap');
     const gb = el('div', 'gbar'); gb.style.background = c.color; nw.appendChild(gb);
     nw.appendChild(el('span', 'nm', c.name));
     if (c.alias && !c.flag) nw.appendChild(el('span', 'al', '· ' + c.alias));
-    if (c.flag) nw.appendChild(el('span', 'flag', c.flag));
+    if (cpp) { const b = el('span', 'pp-badge', '⏸ POSTPONED'); if (c.flag) { b.title = c.flag; grp.title = c.flag; } nw.appendChild(b); }
     else nw.appendChild(el('span', 'ct mono', String(tasksOf(c.id).length)));
     const add = el('button', 'gadd', '+'); add.title = 'Add task to ' + c.name; add.type = 'button';
     add.onclick = (e) => { e.stopPropagation(); Sound.open(); openTaskEditor(null, c.id); };
@@ -165,13 +171,15 @@ function render(opts = {}) {
     for (const t of orderedTasks(c.id)) {
       const sd = startOf(t), oe = parse(t.oe), ne = parse(t.ne);
       const uns = isUnscheduled(t);
-      const tl = el('div', 'tlab' + (uns ? ' uns' : '') + (t.status === 'done' ? ' done-row' : ''));
+      const pp = cpp || taskPostponed(t);
+      const tl = el('div', 'tlab' + (uns ? ' uns' : '') + (t.status === 'done' ? ' done-row' : '') + (pp ? ' postponed' : ''));
       const nm = el('div', 'nmwrap');
       const dot = el('span', 'dot'); dot.style.background = c.color; nm.appendChild(dot);
       nm.appendChild(el('span', 'nm', t.name));
       if (t.tag) nm.appendChild(el('span', 'tag', t.tag));
       if (uns) nm.appendChild(el('span', 'tag', 'tbd'));
       if (t.status === 'done') nm.appendChild(el('span', 'done-tag', '✓ Done'));
+      if (taskPostponed(t)) nm.appendChild(el('span', 'pp-tag', 'postponed'));
       const acts = el('div', 'rowacts');
       const editB = el('button', 'ra', '✎'); editB.title = 'Edit'; editB.onclick = () => { Sound.open(); openTaskEditor(t.id); };
       const delB = el('button', 'ra ra-del', '✕'); delB.title = 'Delete task (removes it for everyone)'; delB.onclick = () => { if (confirm('Delete "' + t.name + '"? This removes it for everyone.')) { state.tasks = state.tasks.filter((x) => x.id !== t.id); Sound.delete(); commit('Task deleted', { type: 'deleteTask', id: t.id }); } };
@@ -188,7 +196,7 @@ function render(opts = {}) {
       D.labels.appendChild(tl);
 
       // plot row + bar
-      const pr = el('div', 'prow');
+      const pr = el('div', 'prow' + (pp ? ' postponed' : ''));
       const delay = animate ? Math.min(rowIndex * 9, 320) + 'ms' : '0ms';
       if (uns) {
         const up = el('div', 'uns-pill', t.status === 'tbd' ? 'TBD' : 'Unscheduled'); up.style.animationDelay = delay;
