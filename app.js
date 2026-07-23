@@ -26,7 +26,7 @@ const D = {
 // ---- App state -------------------------------------------------------------
 let state = null;           // the plan { version, updatedAt, categories[], tasks[] }
 let cloudOK = false;        // is the cloud store reachable & configured?
-const view = { tab: 'all', hiddenCats: new Set(), hiddenTasks: new Set(), muted: false };
+const view = { tab: 'all', hiddenCats: new Set(), muted: false };
 let scale = null;           // { start: Date, days, dayWidth, x(date) }
 let todayISO = null;
 
@@ -58,7 +58,7 @@ function visibleCategories() {
   if (view.tab !== 'all') return state.categories.filter((c) => c.id === view.tab);
   return state.categories.filter((c) => !view.hiddenCats.has(c.id));
 }
-function tasksOf(catId) { return state.tasks.filter((t) => t.cat === catId && !view.hiddenTasks.has(t.id)); }
+function tasksOf(catId) { return state.tasks.filter((t) => t.cat === catId); }
 function orderedTasks(catId) {
   const items = tasksOf(catId);
   const sched = items.filter((t) => !isUnscheduled(t));
@@ -174,8 +174,8 @@ function render(opts = {}) {
       if (t.status === 'done') nm.appendChild(el('span', 'done-tag', '✓ Done'));
       const acts = el('div', 'rowacts');
       const editB = el('button', 'ra', '✎'); editB.title = 'Edit'; editB.onclick = () => { Sound.open(); openTaskEditor(t.id); };
-      const hideB = el('button', 'ra', '✕'); hideB.title = 'Hide this row (this device)'; hideB.onclick = () => { Sound.toggle(); view.hiddenTasks.add(t.id); saveView(); render({ animate: true }); };
-      acts.appendChild(editB); acts.appendChild(hideB); nm.appendChild(acts);
+      const delB = el('button', 'ra ra-del', '✕'); delB.title = 'Delete task (removes it for everyone)'; delB.onclick = () => { if (confirm('Delete "' + t.name + '"? This removes it for everyone.')) { state.tasks = state.tasks.filter((x) => x.id !== t.id); Sound.delete(); commit('Task deleted', { type: 'deleteTask', id: t.id }); } };
+      acts.appendChild(editB); acts.appendChild(delB); nm.appendChild(acts);
       tl.appendChild(nm);
       const sc1 = el('div', 'dcell mono start', sd && !uns ? fmtShort(sd) : '—');
       const oc = el('div', 'dcell mono oe', oe ? fmtShort(oe) : '—');
@@ -247,17 +247,12 @@ function renderLegend() {
 }
 
 function renderHiddenNote() {
-  const onAll = view.tab === 'all';
-  // Hidden businesses only matter on the All view; hidden tasks are counted
-  // within the active business when on an individual tab.
-  const hc = onAll ? view.hiddenCats.size : 0;
-  const ht = onAll ? view.hiddenTasks.size : state.tasks.filter((t) => t.cat === view.tab && view.hiddenTasks.has(t.id)).length;
-  if (!hc && !ht) { D.hiddenNote.innerHTML = ''; return; }
-  const parts = [];
-  if (hc) parts.push(hc + ' business' + (hc > 1 ? 'es' : ''));
-  if (ht) parts.push(ht + ' task' + (ht > 1 ? 's' : ''));
-  D.hiddenNote.innerHTML = parts.join(' · ') + ' hidden on this device — <a id="showAll">show all</a>';
-  $('#showAll').onclick = () => { view.hiddenCats.clear(); view.hiddenTasks.clear(); Sound.toggle(); saveView(); render({ animate: true }); };
+  // Only hidden businesses matter now (and only on the All view). Tasks are
+  // deleted for everyone, not hidden per-device.
+  const hc = view.tab === 'all' ? view.hiddenCats.size : 0;
+  if (!hc) { D.hiddenNote.innerHTML = ''; return; }
+  D.hiddenNote.innerHTML = hc + ' business' + (hc > 1 ? 'es' : '') + ' hidden on this device — <a id="showAll">show all</a>';
+  $('#showAll').onclick = () => { view.hiddenCats.clear(); Sound.toggle(); saveView(); render({ animate: true }); };
 }
 
 function renderNotes() {
@@ -356,7 +351,7 @@ function openTaskEditor(taskId, presetCat) {
   wrap.appendChild(body);
 
   const foot = el('div', 'dlg-foot');
-  if (editing) { const del = el('button', 'btn danger', 'Delete'); del.onclick = () => { if (confirm('Delete "' + t.name + '"?')) { state.tasks = state.tasks.filter((x) => x.id !== taskId); Sound.delete(); commit('Task deleted'); closeModal(); } }; foot.appendChild(del); }
+  if (editing) { const del = el('button', 'btn danger', 'Delete'); del.onclick = () => { if (confirm('Delete "' + t.name + '"?')) { state.tasks = state.tasks.filter((x) => x.id !== taskId); Sound.delete(); commit('Task deleted', { type: 'deleteTask', id: taskId }); closeModal(); } }; foot.appendChild(del); }
   const right = el('div', 'right');
   const cancel = el('button', 'btn ghost', 'Cancel'); cancel.onclick = closeModal; right.appendChild(cancel);
   const save = el('button', 'btn primary', editing ? 'Save' : 'Add task');
@@ -365,8 +360,8 @@ function openTaskEditor(taskId, presetCat) {
     if (!name) { err.textContent = 'Please enter a task name.'; fName.focus(); return; }
     const dur = clamp(parseInt(fDur.value, 10) || 0, 0, 999);
     const patch = { name, cat: sel.value, oe: fOe.value || null, ne: fNe.value || null, dur, status: curStatus, note: fNote.value.trim() };
-    if (editing) { Object.assign(t, patch); Sound.save(); commit('Task updated'); }
-    else { state.tasks.push({ id: uid('k'), ...patch }); Sound.add(); commit('Task added'); }
+    if (editing) { Object.assign(t, patch); Sound.save(); commit('Task updated', { type: 'upsertTask', task: { ...t } }); }
+    else { const nt = { id: uid('k'), ...patch }; state.tasks.push(nt); Sound.add(); commit('Task added', { type: 'upsertTask', task: { ...nt } }); }
     closeModal();
   };
   right.appendChild(save); foot.appendChild(right); wrap.appendChild(foot);
@@ -403,7 +398,7 @@ function openBizManager() {
           state.categories = state.categories.filter((z) => z.id !== c.id);
           state.tasks = state.tasks.filter((t) => t.cat !== c.id);
           if (view.tab === c.id) view.tab = 'all';
-          Sound.delete(); commit('Business deleted'); refresh();
+          Sound.delete(); commit('Business deleted', { type: 'deleteCat', id: c.id }); refresh();
         }
       };
       acts.append(up, dn, ed, del); row.appendChild(acts); list.appendChild(row);
@@ -420,7 +415,7 @@ function openBizManager() {
   openModal(wrap, true);
 }
 
-function swapCat(i, j) { const a = state.categories; [a[i], a[j]] = [a[j], a[i]]; commit(); }
+function swapCat(i, j) { const a = state.categories; [a[i], a[j]] = [a[j], a[i]]; commit(null, { type: 'reorderCats', order: state.categories.map((c) => c.id) }); }
 
 function openBizEditor(cat, after) {
   const editing = !!cat;
@@ -444,9 +439,8 @@ function openBizEditor(cat, after) {
   const save = el('button', 'btn primary', editing ? 'Save' : 'Add');
   save.onclick = () => {
     const name = fName.value.trim(); if (!name) { err.textContent = 'Please enter a name.'; return; }
-    if (editing) { const real = catById(cat.id); real.name = name; real.alias = fAlias.value.trim(); real.color = color; Sound.save(); }
-    else { state.categories.push({ id: uid('c'), name, alias: fAlias.value.trim(), color, flag: '' }); Sound.add(); }
-    commit(editing ? 'Business updated' : 'Business added');
+    if (editing) { const real = catById(cat.id); real.name = name; real.alias = fAlias.value.trim(); real.color = color; Sound.save(); commit('Business updated', { type: 'upsertCat', cat: { ...real } }); }
+    else { const nc = { id: uid('c'), name, alias: fAlias.value.trim(), color, flag: '' }; state.categories.push(nc); Sound.add(); commit('Business added', { type: 'upsertCat', cat: { ...nc } }); }
     openBizManager();
   };
   right.appendChild(save); foot.appendChild(right); wrap.appendChild(foot);
@@ -470,9 +464,9 @@ function normalize(p) {
 }
 function saveLS() { try { localStorage.setItem(LS_DATA, JSON.stringify(state)); } catch (e) {} }
 function loadLS() { try { const s = localStorage.getItem(LS_DATA); return s ? normalize(JSON.parse(s)) : null; } catch (e) { return null; } }
-function saveView() { try { localStorage.setItem(LS_VIEW, JSON.stringify({ tab: view.tab, hiddenCats: [...view.hiddenCats], hiddenTasks: [...view.hiddenTasks], muted: view.muted })); } catch (e) {} }
+function saveView() { try { localStorage.setItem(LS_VIEW, JSON.stringify({ tab: view.tab, hiddenCats: [...view.hiddenCats], muted: view.muted })); } catch (e) {} }
 function loadView() {
-  try { const v = JSON.parse(localStorage.getItem(LS_VIEW) || '{}'); view.tab = v.tab || 'all'; view.hiddenCats = new Set(v.hiddenCats || []); view.hiddenTasks = new Set(v.hiddenTasks || []); view.muted = !!v.muted; } catch (e) {}
+  try { const v = JSON.parse(localStorage.getItem(LS_VIEW) || '{}'); view.tab = v.tab || 'all'; view.hiddenCats = new Set(v.hiddenCats || []); view.muted = !!v.muted; } catch (e) {}
 }
 
 function setSync(stateName) {
@@ -485,22 +479,58 @@ function setSync(stateName) {
     : stateName === 'saving' ? 'Saving to the cloud…' : 'Could not reach the cloud; kept a local copy.';
 }
 
-// Mutate -> persist -> re-render. `toastMsg` optional.
-function commit(toastMsg) {
+// An edit is sent as an "operation" — the intent, not the whole document:
+//   { type:'deleteTask', id }        { type:'upsertTask', task }
+//   { type:'deleteCat', id }         { type:'upsertCat', cat }
+//   { type:'reorderCats', order }    { type:'replaceAll', plan }
+// The server applies each op to the CURRENT shared plan, so a stale tab can
+// never clobber others' changes or resurrect a deleted item.
+const POLL_MS = 10000;      // how often an open tab re-checks the cloud
+const opQueue = [];         // ops waiting to be sent, in order
+let pumping = false;        // is the queue currently sending?
+
+// Mutate local state -> persist -> re-render, then sync the op to the cloud.
+// `op` is optional (omitted for pure view changes, and ignored in local mode).
+function commit(toastMsg, op) {
   state.updatedAt = Date.now();
   saveLS();
   render();
   if (toastMsg) toast(toastMsg);
-  if (cloudOK) { setSync('saving'); clearTimeout(saveTimer); saveTimer = setTimeout(pushCloud, 800); }
+  if (cloudOK && op) enqueueOp(op);
 }
 
-async function pushCloud() {
-  try {
-    const r = await fetch('/api/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(state) });
-    if (r.status === 401) return sessionExpired();
-    if (!r.ok) throw new Error('bad status ' + r.status);
-    setSync('synced');
-  } catch (e) { setSync('error'); clearTimeout(saveTimer); saveTimer = setTimeout(pushCloud, 4000); }
+function enqueueOp(op) { if (!cloudOK || !op) return; opQueue.push(op); pumpQueue(); }
+
+// Send queued ops one at a time (preserving order), then adopt the authoritative
+// plan the server returns so this device converges on the shared version.
+async function pumpQueue() {
+  if (pumping) return;
+  pumping = true;
+  setSync('saving');
+  let latest = null;
+  while (opQueue.length) {
+    let r;
+    try {
+      r = await fetch('/api/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: opQueue[0] }) });
+    } catch (e) { return pumpRetry(); }
+    if (r.status === 401) { pumping = false; return sessionExpired(); }
+    if (!r.ok) return pumpRetry();
+    try { const data = await r.json(); latest = data && data.plan; } catch (e) { return pumpRetry(); }
+    opQueue.shift();
+  }
+  pumping = false;
+  if (latest) adoptServer(latest);
+  setSync('synced');
+}
+function pumpRetry() { pumping = false; setSync('error'); clearTimeout(saveTimer); saveTimer = setTimeout(pumpQueue, 4000); }
+
+// Replace local state with the server's authoritative plan (skip the re-render
+// if an editor is open so the form isn't yanked out from under the user).
+function adoptServer(plan) {
+  if (!plan || !Array.isArray(plan.categories)) return;
+  state = normalize(plan);
+  saveLS();
+  if (!D.modal.classList.contains('open')) render();
 }
 
 function sessionExpired() { toast('Session expired — reloading to sign in…'); setTimeout(() => location.reload(), 1200); }
@@ -526,25 +556,35 @@ async function load() {
   else if (configured) {
     // Cloud is connected but empty: seed it from this device's existing work
     // (so edits made before connecting the cloud aren't lost), else the default.
-    state = loadLS() || seedPlan(); cloudOK = true; saveLS(); setSync('saving'); pushCloud();
+    state = loadLS() || seedPlan(); cloudOK = true; saveLS(); setSync('saving');
+    enqueueOp({ type: 'replaceAll', plan: { version: state.version, updatedAt: state.updatedAt, categories: state.categories, tasks: state.tasks } });
   } else { state = loadLS() || seedPlan(); cloudOK = false; saveLS(); setSync('local'); }
 
   render({ animate: true });
   startClock();
 }
 
-// refetch when returning to the tab so other devices' edits show up
-document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState !== 'visible' || !cloudOK) return;
+// Pull the shared plan and adopt it if it's newer than ours. Skipped while our
+// own edits are in flight or an editor is open, so nothing gets yanked away.
+async function syncFromCloud() {
+  if (!cloudOK || document.visibilityState !== 'visible') return;
+  if (pumping || opQueue.length || D.modal.classList.contains('open')) return;
   try {
     const res = await fetch('/api/plan', { headers: { accept: 'application/json' } });
     const ct = res.headers.get('content-type') || '';
+    if (res.status === 401) return sessionExpired();
     if (res.ok && ct.includes('application/json')) {
       const data = await res.json();
-      if (data && data.updatedAt && data.updatedAt > (state.updatedAt || 0)) { state = normalize(data); saveLS(); render(); toast('Updated from another device'); }
+      if (data && data.updatedAt && data.updatedAt > (state.updatedAt || 0)) {
+        state = normalize(data); saveLS(); render(); toast('Updated');
+      }
     }
   } catch (e) {}
-});
+}
+
+// Live convergence: poll while the tab is visible, and refetch on refocus.
+setInterval(syncFromCloud, POLL_MS);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncFromCloud(); });
 
 // ============================================================================
 // Live Eastern clock

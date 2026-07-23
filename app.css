@@ -141,6 +141,7 @@ body{
 .tlab:hover .rowacts{ opacity:1; }
 .tlab .ra{ border:0; background:transparent; color:var(--faint); cursor:pointer; font-size:12px; line-height:1; padding:3px 5px; border-radius:6px; transition:color .14s, background .14s; }
 .tlab .ra:hover{ color:var(--ink); background:var(--line3); }
+.tlab .ra-del:hover{ color:#fff; background:#d64545; }
 .tlab .dcell{ height:100%; display:flex; align-items:center; justify-content:center; border-left:1px solid var(--line2); font-size:10.5px; }
 .tlab .dcell.start{ color:var(--muted); }
 .tlab .dcell.oe{ color:var(--faint); }
