@@ -257,8 +257,9 @@ body{
 
 @keyframes livePulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
 
-/* ---- Responsive --------------------------------------------------------- */
-@media (max-width:820px){
+/* ---- Responsive (screen only — must NOT apply to print, or a portrait page
+   under 820px would collapse the layout and drop the date columns) --------- */
+@media screen and (max-width:820px){
   .page{ padding:20px 12px 48px; }
   .mast h1{ font-size:21px; }
   :root{ --lw:268px; --dcol:0px; }
