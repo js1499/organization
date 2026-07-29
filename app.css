@@ -270,3 +270,23 @@ body{
 @media (prefers-reduced-motion:reduce){
   *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
 }
+
+/* ---- Print / Save-as-PDF ------------------------------------------------- */
+/* The on-screen chart lives in a horizontal SCROLL box, so a normal print clips
+   everything past the right edge and drops the bar colours. For print we un-clip
+   the timeline, force colours on, un-stick the headers, and hide interactive UI. */
+@media print {
+  @page{ size:landscape; margin:8mm; }
+  :root{ --lw:360px; --dcol:52px; }
+  *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+  html, body{ background:#fff !important; }
+  .page{ max-width:none !important; margin:0 !important; padding:0 !important; }
+  .mast{ margin-bottom:10px; }
+  .toolbar, .hidden-note, .sync, #tip, #toast, .modal-backdrop,
+  .grp .gadd, .tlab .rowacts{ display:none !important; }
+  .card{ border:none !important; box-shadow:none !important; border-radius:0 !important; overflow:visible !important; }
+  .gcol-time{ overflow:visible !important; }
+  .gcol-time::-webkit-scrollbar{ display:none !important; }
+  .lab-head, .axis{ position:static !important; box-shadow:none !important; }
+  .grp, .tlab, .prow{ break-inside:avoid; page-break-inside:avoid; }
+}

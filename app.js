@@ -16,7 +16,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // ---- DOM refs --------------------------------------------------------------
 const D = {
   sub: $('#sub'), asof: $('#asof'), sync: $('#sync'),
-  tabs: $('#tabs'), muteBtn: $('#muteBtn'), manageBtn: $('#manageBtn'), addBtn: $('#addBtn'),
+  tabs: $('#tabs'), muteBtn: $('#muteBtn'), printBtn: $('#printBtn'), manageBtn: $('#manageBtn'), addBtn: $('#addBtn'),
   legend: $('#legend'), hiddenNote: $('#hiddenNote'),
   labHead: $('#labHead'), labels: $('#labels'), axis: $('#axis'),
   timeScroll: $('#timeScroll'), timeInner: $('#timeInner'), bg: $('#bg'), rows: $('#rows'),
@@ -28,6 +28,7 @@ let state = null;           // the plan { version, updatedAt, categories[], task
 let cloudOK = false;        // is the cloud store reachable & configured?
 const view = { tab: 'all', hiddenCats: new Set(), muted: false };
 let scale = null;           // { start: Date, days, dayWidth, x(date) }
+let printFit = 0;           // when >0, fit the whole timeline into this many px (for printing)
 let todayISO = null;
 
 // ============================================================================
@@ -90,8 +91,8 @@ function computeScale() {
   while (start.getDay() !== 1) start = new Date(start.getTime() - MS);
   let end = new Date(max.getTime() + 5 * MS);
   const days = Math.max(7, Math.round((end - start) / MS));
-  const cw = D.timeScroll.clientWidth || 900;
-  const dayWidth = clamp(cw / days, 9, 30);
+  const cw = printFit || D.timeScroll.clientWidth || 900;
+  const dayWidth = clamp(cw / days, printFit ? 4 : 9, 30);
   scale = { start, days, dayWidth, x: (d) => Math.round((d - start) / MS) * dayWidth };
   return { start, end, days, dayWidth, width: days * dayWidth, today };
 }
@@ -102,7 +103,7 @@ function computeScale() {
 function render(opts = {}) {
   const animate = !!opts.animate;
   const sc = computeScale();
-  const width = Math.max(sc.width, D.timeScroll.clientWidth - 2);
+  const width = printFit ? sc.width : Math.max(sc.width, D.timeScroll.clientWidth - 2);
   D.timeInner.style.width = width + 'px';
 
   renderTabs();
@@ -641,6 +642,11 @@ function toast(msg) { D.toast.textContent = msg; D.toast.classList.add('on'); cl
 // Wire up + boot
 // ============================================================================
 D.addBtn.onclick = () => { Sound.open(); openTaskEditor(null, view.tab !== 'all' ? view.tab : undefined); };
+D.printBtn.onclick = () => window.print();
+// Printing: reflow the timeline to fit the page (so nothing is clipped), then
+// restore the on-screen scale. Fires for both the button and Cmd/Ctrl+P.
+window.addEventListener('beforeprint', () => { printFit = 620; render(); });
+window.addEventListener('afterprint', () => { printFit = 0; render(); });
 D.manageBtn.onclick = openBizManager;
 D.muteBtn.onclick = () => { view.muted = !view.muted; Sound.muted = view.muted; if (!view.muted) Sound.toggle(); updateMuteBtn(); saveView(); };
 let resizeTimer = null;
