@@ -17,6 +17,9 @@ behind a shared-password gate. No build step — plain HTML/CSS/ES-modules.
   the bar carries amber notches at each past target. `oe`/`ne` are still written
   (original/current) for back-compat, so older tabs keep working until they
   refresh.
+- **Resizable columns** — the task-title column auto-fits so every title shows in
+  full by default; drag the divider in the header to resize it (double-click to
+  re-fit). The width is remembered per device.
 - **Live clock** — the "As of" stamp and the dashed *today* line follow live
   **US-Eastern** time (`America/New_York`, DST-aware). The time window auto-fits
   whatever is visible.

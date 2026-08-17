@@ -3,8 +3,8 @@
    slate-on-soft-blue look: tighter type, calmer lines, subtle depth + motion.
    ============================================================================ */
 :root{
-  --lw-base:400px;       /* label width at 0 push columns (name + Orig+Cur+Slip) */
-  --lw:calc(var(--lw-base) + var(--extra-cols, 0) * var(--dcol));  /* grows one --dcol per push column so names keep their room */
+  --name-w:300px;        /* task-title column — auto-fits the longest title; drag the header divider to resize */
+  --lw:calc(var(--name-w) + var(--dcol) * (2 + var(--extra-cols, 0)) + var(--scol));  /* label column = title + date columns */
   --dcol:56px;           /* width of each date column                          */
   --scol:46px;           /* width of the slip column                           */
   --head-h:60px;         /* chart header height (both columns)                 */
@@ -107,6 +107,10 @@ body{
 .lab-head .h-task{ display:flex; align-items:flex-end; padding:0 12px 9px 16px; font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); font-weight:700; }
 .lab-head .h-date{ display:flex; align-items:flex-end; justify-content:center; text-align:center; padding:0 4px 8px; border-left:1px solid var(--line2); font-size:9px; line-height:1.15; letter-spacing:.03em; text-transform:uppercase; color:var(--faint); font-weight:700; }
 .lab-head .h-date.hi{ color:#475569; }
+/* draggable divider to resize the title column (sits at the title/date boundary) */
+.col-resize{ position:absolute; top:0; bottom:0; left:var(--name-w); width:11px; margin-left:-5px; cursor:col-resize; z-index:9; }
+.col-resize::after{ content:""; position:absolute; top:9px; bottom:9px; left:5px; width:2px; border-radius:1px; background:var(--line2); opacity:0; transition:opacity .15s, background .15s; }
+.col-resize:hover::after{ opacity:1; background:var(--accent); }
 
 .axis{ height:var(--head-h); position:sticky; top:0; z-index:6; background:var(--card); border-bottom:1px solid var(--line2); box-shadow:0 6px 14px -12px rgba(15,23,42,.35); }
 .months{ position:absolute; inset:0 0 auto 0; height:24px; }
@@ -307,7 +311,8 @@ body{
    the timeline, force colours on, un-stick the headers, and hide interactive UI. */
 @media print {
   @page{ size:landscape; margin:8mm; }
-  :root{ --lw-base:340px; --dcol:50px; --scol:42px; }
+  :root{ --dcol:50px; --scol:42px; }
+  .col-resize{ display:none !important; }
   *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
   html, body{ background:#fff !important; }
   .page{ max-width:none !important; margin:0 !important; padding:0 !important; }

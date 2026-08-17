@@ -11,6 +11,12 @@ const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, txt) => { const n = document.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
 const uid = (p) => p + Math.random().toString(36).slice(2, 9);
+const UIFONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+let _mctx;
+function measureText(s, font) {
+  try { if (_mctx === undefined) { const c = document.createElement('canvas'); _mctx = (c.getContext && c.getContext('2d')) || null; } if (_mctx) { _mctx.font = font; return _mctx.measureText(s || '').width; } } catch (e) {}
+  return (s ? s.length : 0) * 7;  // fallback (e.g. headless without canvas)
+}
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 // ---- DOM refs --------------------------------------------------------------
@@ -26,7 +32,7 @@ const D = {
 // ---- App state -------------------------------------------------------------
 let state = null;           // the plan { version, updatedAt, categories[], tasks[] }
 let cloudOK = false;        // is the cloud store reachable & configured?
-const view = { tab: 'all', hiddenCats: new Set(), muted: false };
+const view = { tab: 'all', hiddenCats: new Set(), muted: false, nameW: null };
 let scale = null;           // { start: Date, days, dayWidth, x(date) }
 let printFit = 0;           // when >0, fit the whole timeline into this many px (for printing)
 let todayISO = null;
@@ -158,7 +164,18 @@ function render(opts = {}) {
   let maxInter = 0;
   for (const c of cats) for (const t of tasksOf(c.id)) maxInter = Math.max(maxInter, targetsOf(t).length - 2);
   const pushCols = Math.max(0, Math.min(3, maxInter));
-  const gc = ['1fr', 'var(--dcol)']; for (let i = 0; i < pushCols; i++) gc.push('var(--dcol)'); gc.push('var(--dcol)', 'var(--scol)');
+  // Auto-fit the title column to the longest visible title so full titles show by
+  // default; a user-dragged width (view.nameW) overrides it.
+  let autoW = 240;
+  for (const c of cats) {
+    autoW = Math.max(autoW, measureText(c.name + (c.alias ? ' · ' + c.alias : ''), '700 13px ' + UIFONT) + 112);
+    for (const t of tasksOf(c.id)) autoW = Math.max(autoW, measureText(t.name, '12.5px ' + UIFONT) + 140 + (t.status === 'done' ? 52 : 0));
+  }
+  autoW = clamp(Math.round(autoW), 240, 640);
+  let nameW = view.nameW || autoW;
+  if (printFit) nameW = Math.min(nameW, 300);
+  document.documentElement.style.setProperty('--name-w', nameW + 'px');
+  const gc = ['var(--name-w)', 'var(--dcol)']; for (let i = 0; i < pushCols; i++) gc.push('var(--dcol)'); gc.push('var(--dcol)', 'var(--scol)');
   document.documentElement.style.setProperty('--grid-cols', gc.join(' '));
   document.documentElement.style.setProperty('--extra-cols', pushCols);
   renderHead(pushCols);
@@ -243,6 +260,16 @@ function renderHead(pushCols) {
   if (pushCols > 0) { const h = el('div', 'h-date push', 'Pushed →'); h.style.gridColumn = 'span ' + pushCols; D.labHead.appendChild(h); }
   D.labHead.appendChild(el('div', 'h-date hi', 'Current'));
   D.labHead.appendChild(el('div', 'h-date', 'Slip'));
+  const handle = el('div', 'col-resize'); handle.title = 'Drag to resize the title column · double-click to auto-fit';
+  handle.onmousedown = (e) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--name-w')) || 300;
+    const move = (ev) => document.documentElement.style.setProperty('--name-w', clamp(startW + (ev.clientX - startX), 200, 760) + 'px');
+    const up = (ev) => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); view.nameW = Math.round(clamp(startW + (ev.clientX - startX), 200, 760)); saveView(); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  };
+  handle.ondblclick = () => { view.nameW = null; saveView(); render(); };
+  D.labHead.appendChild(handle);
 }
 
 // Cells: Original · [up to `pushCols` recent pushes, right-aligned, older→"…"] · Current · Slip
@@ -580,9 +607,9 @@ function normalize(p) {
 }
 function saveLS() { try { localStorage.setItem(LS_DATA, JSON.stringify(state)); } catch (e) {} }
 function loadLS() { try { const s = localStorage.getItem(LS_DATA); return s ? normalize(JSON.parse(s)) : null; } catch (e) { return null; } }
-function saveView() { try { localStorage.setItem(LS_VIEW, JSON.stringify({ tab: view.tab, hiddenCats: [...view.hiddenCats], muted: view.muted })); } catch (e) {} }
+function saveView() { try { localStorage.setItem(LS_VIEW, JSON.stringify({ tab: view.tab, hiddenCats: [...view.hiddenCats], muted: view.muted, nameW: view.nameW })); } catch (e) {} }
 function loadView() {
-  try { const v = JSON.parse(localStorage.getItem(LS_VIEW) || '{}'); view.tab = v.tab || 'all'; view.hiddenCats = new Set(v.hiddenCats || []); view.muted = !!v.muted; } catch (e) {}
+  try { const v = JSON.parse(localStorage.getItem(LS_VIEW) || '{}'); view.tab = v.tab || 'all'; view.hiddenCats = new Set(v.hiddenCats || []); view.muted = !!v.muted; view.nameW = v.nameW || null; } catch (e) {}
 }
 
 function setSync(stateName) {
