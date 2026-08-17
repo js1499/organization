@@ -11,6 +11,12 @@ behind a shared-password gate. No build step — plain HTML/CSS/ES-modules.
   **deletes** that task for everyone (with a confirm); **+ Add task** to create
   one; the **Businesses** button to add/rename/recolour/reorder/delete
   businesses. Changes save instantly and sync to everyone.
+- **Push history** — each task keeps its whole trail of target dates (`targets`:
+  original → each push → current). The row's **↣** button pushes it to a new
+  date; the columns show **Original · recent pushes · Current · Slip (+Nd)**, and
+  the bar carries amber notches at each past target. `oe`/`ne` are still written
+  (original/current) for back-compat, so older tabs keep working until they
+  refresh.
 - **Live clock** — the "As of" stamp and the dashed *today* line follow live
   **US-Eastern** time (`America/New_York`, DST-aware). The time window auto-fits
   whatever is visible.

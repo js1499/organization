@@ -37,8 +37,17 @@ let todayISO = null;
 function parse(s) { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
 const fmtLong = (d) => MON[d.getMonth()] + ' ' + String(d.getDate()).padStart(2, '0') + ', ' + d.getFullYear();
 const fmtShort = (d) => MON[d.getMonth()] + ' ' + d.getDate();
-function endOf(t) { return parse(t.ne) || parse(t.oe); }
-function startOf(t) { const a = parse(t.oe) || parse(t.ne); if (!a || t.dur == null) return a; return new Date(a.getTime() - t.dur * MS); }
+// A task's target end-dates form a push history: targets[0] = original target,
+// last = current target, the ones between = successive pushes. oe/ne are kept in
+// sync for back-compat with older clients, but `targets` is the source of truth.
+function targetsOf(t) { return (t.targets && t.targets.length) ? t.targets : [t.oe, t.ne].filter(Boolean); }
+function origEndISO(t) { const a = targetsOf(t); return a[0] || null; }
+function curEndISO(t) { const a = targetsOf(t); return a[a.length - 1] || null; }
+function pushesOf(t) { return targetsOf(t).slice(1, -1); }  // intermediate pushes only
+function slipDays(t) { const o = parse(origEndISO(t)), c = parse(curEndISO(t)); return (o && c) ? Math.round((c - o) / MS) : 0; }
+function isoAdd(iso, n) { const d = parse(iso); if (!d) return iso; const x = new Date(d.getTime() + n * MS); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+function endOf(t) { return parse(curEndISO(t)) || parse(origEndISO(t)); }
+function startOf(t) { const a = parse(origEndISO(t)) || parse(curEndISO(t)); if (!a || t.dur == null) return a; return new Date(a.getTime() - t.dur * MS); }
 function isUnscheduled(t) { return t.status === 'tbd' || !endOf(t); }
 
 // "Postponed" markers: a category carries a flag (e.g. Tax's "REVISITED POST
@@ -144,6 +153,15 @@ function render(opts = {}) {
   D.rows.classList.toggle('anim', animate);
   let rowIndex = 0;
   const cats = visibleCategories();
+  // Date columns flex to the most-pushed task in view: Original · [up to 3 recent
+  // pushes] · Current · Slip. Older pushes past 3 collapse into a "…".
+  let maxInter = 0;
+  for (const c of cats) for (const t of tasksOf(c.id)) maxInter = Math.max(maxInter, targetsOf(t).length - 2);
+  const pushCols = Math.max(0, Math.min(3, maxInter));
+  const gc = ['1fr', 'var(--dcol)']; for (let i = 0; i < pushCols; i++) gc.push('var(--dcol)'); gc.push('var(--dcol)', 'var(--scol)');
+  document.documentElement.style.setProperty('--grid-cols', gc.join(' '));
+  document.documentElement.style.setProperty('--extra-cols', pushCols);
+  renderHead(pushCols);
   if (!cats.length) {
     const empty = el('div', 'tlab'); empty.style.gridTemplateColumns = '1fr';
     const w = el('div', 'nmwrap'); w.appendChild(el('span', 'nm', 'Nothing to show — add a task or un-hide a business.')); empty.appendChild(w);
@@ -164,13 +182,13 @@ function render(opts = {}) {
     add.onclick = (e) => { e.stopPropagation(); Sound.open(); openTaskEditor(null, c.id); };
     nw.appendChild(add);
     grp.appendChild(nw);
-    for (let k = 0; k < 3; k++) grp.appendChild(el('div', 'dcell'));
+    for (let k = 0; k < 3 + pushCols; k++) grp.appendChild(el('div', 'dcell'));
     D.labels.appendChild(grp);
     const sp = el('div', 'rspace'); sp.appendChild(el('div', 'sep')); D.rows.appendChild(sp);
 
     // tasks
     for (const t of orderedTasks(c.id)) {
-      const sd = startOf(t), oe = parse(t.oe), ne = parse(t.ne);
+      const sd = startOf(t);
       const uns = isUnscheduled(t);
       const pp = cpp || taskPostponed(t);
       const tl = el('div', 'tlab' + (uns ? ' uns' : '') + (t.status === 'done' ? ' done-row' : '') + (pp ? ' postponed' : ''));
@@ -184,15 +202,10 @@ function render(opts = {}) {
       const acts = el('div', 'rowacts');
       const editB = el('button', 'ra', '✎'); editB.title = 'Edit'; editB.onclick = () => { Sound.open(); openTaskEditor(t.id); };
       const delB = el('button', 'ra ra-del', '✕'); delB.title = 'Delete task (removes it for everyone)'; delB.onclick = () => { if (confirm('Delete "' + t.name + '"? This removes it for everyone.')) { state.tasks = state.tasks.filter((x) => x.id !== t.id); Sound.delete(); commit('Task deleted', { type: 'deleteTask', id: t.id }); } };
-      acts.appendChild(editB); acts.appendChild(delB); nm.appendChild(acts);
+      const pushB = el('button', 'ra ra-push', '↣'); pushB.title = 'Push to a new date'; pushB.onclick = (e) => { e.stopPropagation(); openPushPopover(t, pushB); };
+      acts.appendChild(editB); acts.appendChild(pushB); acts.appendChild(delB); nm.appendChild(acts);
       tl.appendChild(nm);
-      const sc1 = el('div', 'dcell mono start', sd && !uns ? fmtShort(sd) : '—');
-      const oc = el('div', 'dcell mono oe', oe ? fmtShort(oe) : '—');
-      let nc;
-      if (t.status === 'inProgress') { nc = el('div', 'dcell ne prog', 'In progress'); }
-      else if (uns) { nc = el('div', 'dcell ne tbdv', 'TBD'); }
-      else { nc = el('div', 'dcell mono ne', ne ? fmtShort(ne) : (oe ? fmtShort(oe) : '—')); }
-      tl.appendChild(sc1); tl.appendChild(oc); tl.appendChild(nc);
+      buildDateCells(t, pushCols).forEach((cell) => tl.appendChild(cell));
       tl.ondblclick = () => { Sound.open(); openTaskEditor(t.id); };
       D.labels.appendChild(tl);
 
@@ -213,12 +226,84 @@ function render(opts = {}) {
         bw.onclick = () => { Sound.open(); openTaskEditor(t.id); };
         attachTip(bw, t, c); pr.appendChild(bw);
       }
+      const tgN = targetsOf(t);   // amber notches marking each past target it was pushed off of
+      if (!uns && tgN.length > 1) for (let i = 0; i < tgN.length - 1; i++) { const nx = el('div', 'pnotch'); nx.style.left = scale.x(parse(tgN[i])) + 'px'; nx.title = 'was due ' + fmtShort(parse(tgN[i])); pr.appendChild(nx); }
       D.rows.appendChild(pr);
       rowIndex++;
     }
   }
 
   renderNotes();
+}
+
+function renderHead(pushCols) {
+  D.labHead.innerHTML = '';
+  D.labHead.appendChild(el('div', 'h-task', 'Workstream / Task'));
+  D.labHead.appendChild(el('div', 'h-date', 'Original'));
+  if (pushCols > 0) { const h = el('div', 'h-date push', 'Pushed →'); h.style.gridColumn = 'span ' + pushCols; D.labHead.appendChild(h); }
+  D.labHead.appendChild(el('div', 'h-date hi', 'Current'));
+  D.labHead.appendChild(el('div', 'h-date', 'Slip'));
+}
+
+// Cells: Original · [up to `pushCols` recent pushes, right-aligned, older→"…"] · Current · Slip
+function buildDateCells(t, pushCols) {
+  const cells = [];
+  const tg = targetsOf(t);
+  const uns = isUnscheduled(t);
+  const orig = tg[0] ? parse(tg[0]) : null;
+  const cur = tg[tg.length - 1] ? parse(tg[tg.length - 1]) : null;
+  const inter = tg.slice(1, -1);
+  cells.push(el('div', 'dcell mono oe', orig && !uns ? fmtShort(orig) : '—'));
+  const shown = inter.slice(-pushCols);
+  const blanks = pushCols - shown.length;
+  const hiddenOlder = inter.length - shown.length;
+  for (let j = 0; j < pushCols; j++) {
+    if (j < blanks) { cells.push(el('div', 'dcell')); continue; }
+    const d = shown[j - blanks];
+    const cell = el('div', 'dcell mono push');
+    if (j === blanks && hiddenOlder > 0) { const dots = el('span', 'pmore', '…'); dots.title = inter.map((x) => fmtShort(parse(x))).join(' → '); cell.appendChild(dots); }
+    cell.appendChild(el('span', 'pd', fmtShort(parse(d))));
+    cells.push(cell);
+  }
+  let curCell;
+  if (t.status === 'inProgress') curCell = el('div', 'dcell ne prog', 'In progress');
+  else if (uns) curCell = el('div', 'dcell ne tbdv', 'TBD');
+  else curCell = el('div', 'dcell mono ne', cur ? fmtShort(cur) : '—');
+  cells.push(curCell);
+  const slip = slipDays(t);
+  const slipCell = el('div', 'dcell slip');
+  if (slip > 0 && !uns) slipCell.appendChild(el('span', 'slip-badge' + (slip > 14 ? ' big' : ''), '+' + slip + 'd'));
+  cells.push(slipCell);
+  return cells;
+}
+
+let pushPop = null;
+function closePushPopover() { if (pushPop) { pushPop.remove(); pushPop = null; document.removeEventListener('mousedown', pushOutside, true); } }
+function pushOutside(e) { if (pushPop && !pushPop.contains(e.target)) closePushPopover(); }
+function openPushPopover(t, anchor) {
+  closePushPopover();
+  const pop = el('div', 'push-pop');
+  pop.appendChild(el('div', 'pp-lbl', 'Push “' + t.name + '” to'));
+  const cur = curEndISO(t);
+  const inp = input('date', cur ? isoAdd(cur, 7) : todayISO);
+  const go = el('button', 'btn primary sm', 'Push');
+  const row = el('div', 'pp-row'); row.appendChild(inp); row.appendChild(go); pop.appendChild(row);
+  pushPop = pop;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.top = (r.bottom + 6) + 'px';
+  pop.style.left = Math.max(8, Math.min(r.left - 40, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+  const doPush = () => {
+    const v = inp.value; if (!v) return;
+    const tk = state.tasks.find((x) => x.id === t.id); if (!tk) { closePushPopover(); return; }
+    const tg = targetsOf(tk).slice(); tg.push(v);
+    tk.targets = tg; tk.oe = tg[0]; tk.ne = tg[tg.length - 1];
+    Sound.add(); commit('Pushed “' + tk.name + '” to ' + fmtShort(parse(v)), { type: 'upsertTask', task: { ...tk } });
+    closePushPopover();
+  };
+  go.onclick = doPush;
+  inp.onkeydown = (e) => { if (e.key === 'Enter') doPush(); if (e.key === 'Escape') closePushPopover(); };
+  setTimeout(() => { inp.focus(); document.addEventListener('mousedown', pushOutside, true); }, 30);
 }
 
 function renderTabs() {
@@ -287,10 +372,13 @@ function attachTip(node, t, c) {
     if (isUnscheduled(t)) {
       const u = el('div', 'tr'); u.innerHTML = 'Schedule: <b>' + (t.status === 'tbd' ? 'TBD' : 'not set') + '</b>'; D.tip.appendChild(u);
     } else {
-      const sd = startOf(t), oe = parse(t.oe), ne = parse(t.ne);
+      const sd = startOf(t);
       const a = el('div', 'tr'); a.innerHTML = 'Start: <b>' + (sd ? fmtLong(sd) : '—') + '</b>'; D.tip.appendChild(a);
-      const o = el('div', 'tr'); o.innerHTML = 'Original end: <b>' + (oe ? fmtLong(oe) : 'not set') + '</b>'; D.tip.appendChild(o);
-      const nn = el('div', 'tr'); nn.innerHTML = 'New end: <b>' + (t.status === 'inProgress' ? 'In progress' : (ne ? fmtLong(ne) : '—')) + '</b>'; D.tip.appendChild(nn);
+      const o = el('div', 'tr'); o.innerHTML = 'Original: <b>' + (origEndISO(t) ? fmtLong(parse(origEndISO(t))) : 'not set') + '</b>'; D.tip.appendChild(o);
+      const ps = pushesOf(t);
+      if (ps.length) { const pr = el('div', 'tr'); pr.innerHTML = 'Pushed: <b>' + ps.map((d) => fmtShort(parse(d))).join(' → ') + '</b>'; D.tip.appendChild(pr); }
+      const nn = el('div', 'tr'); nn.innerHTML = 'Current: <b>' + (t.status === 'inProgress' ? 'In progress' : (curEndISO(t) ? fmtLong(parse(curEndISO(t))) : '—')) + '</b>'; D.tip.appendChild(nn);
+      const sl = slipDays(t); if (sl > 0) { const s = el('div', 'tr'); s.innerHTML = 'Slipped: <b>+' + sl + ' days</b>'; D.tip.appendChild(s); }
       const du = el('div', 'tr'); du.innerHTML = 'Duration: <b>' + t.dur + ' day' + (t.dur === 1 ? '' : 's') + '</b>'; D.tip.appendChild(du);
     }
     if (t.note) D.tip.appendChild(el('div', 'tnote', t.note));
@@ -340,12 +428,26 @@ function openTaskEditor(taskId, presetCat) {
   state.categories.forEach((c) => { const o = el('option', null, c.name); o.value = c.id; if (c.id === t.cat) o.selected = true; sel.appendChild(o); });
   body.appendChild(field('Business', sel));
 
-  const r3 = el('div', 'row3');
-  const fOe = input('date', t.oe || '');
-  const fNe = input('date', t.ne || '');
+  let targets = targetsOf(t).slice();
+  const tlist = el('div', 'target-list');
+  function renderTargets() {
+    tlist.innerHTML = '';
+    if (!targets.length) tlist.appendChild(el('div', 'tl-empty', 'No date yet — add the first target below.'));
+    targets.forEach((d, i) => {
+      const row = el('div', 'target-row');
+      row.appendChild(el('span', 't-lbl', i === 0 ? 'Original' : (i === targets.length - 1 ? 'Current' : 'Push ' + i)));
+      const di = input('date', d); di.onchange = () => { targets[i] = di.value; };
+      const rm = el('button', 't-rm', '×'); rm.type = 'button'; rm.title = 'Remove this date'; rm.onclick = () => { targets.splice(i, 1); renderTargets(); };
+      row.appendChild(di); row.appendChild(rm); tlist.appendChild(row);
+    });
+  }
+  renderTargets();
+  const addT = el('button', 'btn ghost sm', '+ Push to a new date'); addT.type = 'button';
+  addT.onclick = () => { const last = targets[targets.length - 1]; targets.push(last ? isoAdd(last, 7) : todayISO); renderTargets(); };
+  const tWrap = el('div'); tWrap.appendChild(tlist); tWrap.appendChild(addT);
+  body.appendChild(field('Target dates  ·  original → pushes → current', tWrap));
   const fDur = input('number', t.dur != null ? t.dur : 1, { min: '0', max: '999', step: '1' });
-  r3.appendChild(field('Original end', fOe)); r3.appendChild(field('New end', fNe)); r3.appendChild(field('Duration (days)', fDur));
-  body.appendChild(r3);
+  body.appendChild(field('Duration (days)', fDur));
 
   const seg = el('div', 'seg');
   const statuses = [['normal', 'Normal'], ['inProgress', 'In progress'], ['done', 'Done'], ['tbd', 'TBD']];
@@ -368,7 +470,8 @@ function openTaskEditor(taskId, presetCat) {
     const name = fName.value.trim();
     if (!name) { err.textContent = 'Please enter a task name.'; fName.focus(); return; }
     const dur = clamp(parseInt(fDur.value, 10) || 0, 0, 999);
-    const patch = { name, cat: sel.value, oe: fOe.value || null, ne: fNe.value || null, dur, status: curStatus, note: fNote.value.trim() };
+    let tg = targets.filter(Boolean); tg = tg.filter((d, i) => i === 0 || d !== tg[i - 1]);
+    const patch = { name, cat: sel.value, targets: tg, oe: tg[0] || null, ne: tg[tg.length - 1] || null, dur, status: curStatus, note: fNote.value.trim() };
     if (editing) { Object.assign(t, patch); Sound.save(); commit('Task updated', { type: 'upsertTask', task: { ...t } }); }
     else { const nt = { id: uid('k'), ...patch }; state.tasks.push(nt); Sound.add(); commit('Task added', { type: 'upsertTask', task: { ...nt } }); }
     closeModal();
@@ -468,7 +571,11 @@ function normalize(p) {
   return {
     version: p.version || 1, updatedAt: p.updatedAt || 0,
     categories: (p.categories || []).map((c) => ({ id: c.id || uid('c'), name: c.name || 'Untitled', alias: c.alias || '', color: c.color || '#7F7F7F', flag: c.flag || '' })),
-    tasks: (p.tasks || []).map((t) => ({ id: t.id || uid('k'), cat: t.cat, name: t.name || '', oe: t.oe || null, ne: t.ne || null, dur: t.dur == null ? 1 : t.dur, status: t.status || 'normal', tag: t.tag || '', striped: !!t.striped, note: t.note || '' })),
+    tasks: (p.tasks || []).map((t) => {
+      let targets = (Array.isArray(t.targets) ? t.targets : [t.oe, t.ne]).filter(Boolean);
+      targets = targets.filter((d, i) => i === 0 || d !== targets[i - 1]);  // drop consecutive dups
+      return { id: t.id || uid('k'), cat: t.cat, name: t.name || '', targets, oe: targets[0] || null, ne: targets[targets.length - 1] || null, dur: t.dur == null ? 1 : t.dur, status: t.status || 'normal', tag: t.tag || '', striped: !!t.striped, note: t.note || '' };
+    }),
   };
 }
 function saveLS() { try { localStorage.setItem(LS_DATA, JSON.stringify(state)); } catch (e) {} }

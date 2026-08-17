@@ -3,8 +3,10 @@
    slate-on-soft-blue look: tighter type, calmer lines, subtle depth + motion.
    ============================================================================ */
 :root{
-  --lw:430px;            /* label column width (name + 3 date cols)            */
+  --lw-base:400px;       /* label width at 0 push columns (name + Orig+Cur+Slip) */
+  --lw:calc(var(--lw-base) + var(--extra-cols, 0) * var(--dcol));  /* grows one --dcol per push column so names keep their room */
   --dcol:56px;           /* width of each date column                          */
+  --scol:46px;           /* width of the slip column                           */
   --head-h:60px;         /* chart header height (both columns)                 */
   --grp-h:40px;          /* business group row height                          */
   --row-h:30px;          /* task row height                                    */
@@ -101,7 +103,7 @@ body{
 .time-inner{ position:relative; }
 
 /* labels header + axis header share --head-h so columns line up */
-.lab-head{ height:var(--head-h); display:grid; grid-template-columns:1fr var(--dcol) var(--dcol) var(--dcol); border-bottom:1px solid var(--line2); position:sticky; top:0; z-index:7; background:var(--card); }
+.lab-head{ height:var(--head-h); display:grid; grid-template-columns:var(--grid-cols, 1fr var(--dcol) var(--dcol) var(--scol)); border-bottom:1px solid var(--line2); position:sticky; top:0; z-index:7; background:var(--card); }
 .lab-head .h-task{ display:flex; align-items:flex-end; padding:0 12px 9px 16px; font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); font-weight:700; }
 .lab-head .h-date{ display:flex; align-items:flex-end; justify-content:center; text-align:center; padding:0 4px 8px; border-left:1px solid var(--line2); font-size:9px; line-height:1.15; letter-spacing:.03em; text-transform:uppercase; color:var(--faint); font-weight:700; }
 .lab-head .h-date.hi{ color:#475569; }
@@ -115,7 +117,7 @@ body{
 .tick .t{ position:absolute; top:7px; left:5px; font-size:10px; color:var(--muted); white-space:nowrap; }
 
 /* label rows */
-.grp{ height:var(--grp-h); display:grid; grid-template-columns:1fr var(--dcol) var(--dcol) var(--dcol); align-items:center; border-bottom:1px solid var(--line); background:linear-gradient(to right, rgba(15,23,42,.018), rgba(15,23,42,0)); }
+.grp{ height:var(--grp-h); display:grid; grid-template-columns:var(--grid-cols, 1fr var(--dcol) var(--dcol) var(--scol)); align-items:center; border-bottom:1px solid var(--line); background:linear-gradient(to right, rgba(15,23,42,.018), rgba(15,23,42,0)); }
 .grp .nmwrap{ display:flex; align-items:center; gap:9px; padding:0 10px; min-width:0; }
 .grp .gbar{ width:4px; height:17px; border-radius:2px; flex:0 0 auto; }
 .grp .nm{ font-size:13px; font-weight:700; letter-spacing:-0.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -128,7 +130,7 @@ body{
 .grp .flag{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .grp .dcell{ height:100%; border-left:1px solid var(--line2); }
 
-.tlab{ height:var(--row-h); display:grid; grid-template-columns:1fr var(--dcol) var(--dcol) var(--dcol); align-items:center; border-bottom:1px solid var(--line); transition:background .14s; }
+.tlab{ height:var(--row-h); display:grid; grid-template-columns:var(--grid-cols, 1fr var(--dcol) var(--dcol) var(--scol)); align-items:center; border-bottom:1px solid var(--line); transition:background .14s; }
 .tlab:hover{ background:#FAFCFE; }
 .tlab .nmwrap{ display:flex; align-items:center; gap:8px; padding:0 8px 0 26px; min-width:0; }
 .tlab .dot{ width:6px; height:6px; border-radius:50%; flex:0 0 auto; opacity:.9; }
@@ -145,7 +147,34 @@ body{
 .tlab .dcell{ height:100%; display:flex; align-items:center; justify-content:center; border-left:1px solid var(--line2); font-size:10.5px; }
 .tlab .dcell.start{ color:var(--muted); }
 .tlab .dcell.oe{ color:var(--faint); }
-.tlab .dcell.ne{ color:var(--ink); font-weight:600; }
+.tlab .dcell.ne{ color:var(--ink); font-weight:700; }
+.tlab .dcell.push{ color:var(--muted); gap:2px; }
+.tlab .dcell.push .pmore{ color:var(--faint); margin-right:1px; cursor:default; }
+.tlab .dcell.slip{ }
+.lab-head .h-date.push{ color:var(--faint); }
+.slip-badge{ font-size:9px; font-weight:700; letter-spacing:.02em; color:#92400E; background:#FEF3C7; border:1px solid #F5C563; border-radius:5px; padding:1px 4px; white-space:nowrap; }
+.slip-badge.big{ color:#fff; background:#E0672E; border-color:#E0672E; }
+/* bar notches marking each past target a task was pushed off of */
+.prow{ position:relative; }
+.pnotch{ position:absolute; top:50%; width:2px; height:15px; margin-top:-7px; background:#E0672E; opacity:.5; border-radius:1px; }
+/* +push row button */
+.tlab .ra-push{ font-size:13px; }
+.tlab .ra-push:hover{ color:#fff; background:#10B981; }
+/* push popover */
+.push-pop{ position:fixed; z-index:85; background:var(--card); border:1px solid var(--line2); border-radius:11px; box-shadow:var(--shadow-lg); padding:10px 11px; width:206px; animation:pop .13s var(--ease); }
+.push-pop .pp-lbl{ font-size:11px; font-weight:600; color:var(--muted); margin:0 0 7px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.push-pop .pp-row{ display:flex; gap:6px; }
+.push-pop input{ flex:1 1 auto; min-width:0; padding:6px 8px; font-size:13px; border:1px solid var(--line2); border-radius:8px; }
+.btn.sm{ padding:6px 12px; font-size:12.5px; }
+@keyframes pop{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+/* editor target-date list */
+.target-list{ display:flex; flex-direction:column; gap:7px; margin-bottom:8px; }
+.target-row{ display:flex; align-items:center; gap:9px; }
+.target-row .t-lbl{ flex:0 0 58px; font-size:11px; font-weight:600; color:var(--muted); }
+.target-row input{ flex:1 1 auto; min-width:0; padding:8px 10px; font-size:14px; border:1px solid var(--line2); border-radius:8px; }
+.target-row .t-rm{ flex:0 0 auto; border:0; background:transparent; color:var(--faint); font-size:16px; line-height:1; cursor:pointer; padding:2px 7px; border-radius:6px; }
+.target-row .t-rm:hover{ color:#fff; background:#d64545; }
+.tl-empty{ font-size:12px; color:var(--faint); font-style:italic; padding:2px 0; }
 .tlab .dcell.prog{ color:#1D4ED8; font-style:italic; font-weight:600; font-size:9px; }
 .tlab .dcell.tbdv{ color:var(--faint); font-style:italic; font-weight:600; font-size:9.5px; }
 
@@ -278,7 +307,7 @@ body{
    the timeline, force colours on, un-stick the headers, and hide interactive UI. */
 @media print {
   @page{ size:landscape; margin:8mm; }
-  :root{ --lw:360px; --dcol:52px; }
+  :root{ --lw-base:340px; --dcol:50px; --scol:42px; }
   *{ -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
   html, body{ background:#fff !important; }
   .page{ max-width:none !important; margin:0 !important; padding:0 !important; }
