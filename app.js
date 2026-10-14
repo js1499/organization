@@ -324,7 +324,7 @@ function openPushPopover(t, anchor) {
     const oldLen = tg.length - 1; let base = oldLen > 0 ? setAtOf(tk).slice(-oldLen) : [];   // align prior set-dates, then stamp the new one today
     while (base.length < oldLen) base.unshift(null);
     tk.setAt = [...base, todayISO];
-    tk.log = [...(tk.log || []), { at: todayISO, kind: 'push', text: 'Moved to ' + fmtShort(parse(v)) }];
+    // (the move is recorded by the "set on" stamp under the date — the update log stays notes-only)
     Sound.add(); commit('Pushed “' + tk.name + '” to ' + fmtShort(parse(v)), { type: 'upsertTask', task: { ...tk } });
     closePushPopover();
   };
@@ -603,7 +603,7 @@ function normalize(p) {
     tasks: (p.tasks || []).map((t) => {
       let targets = (Array.isArray(t.targets) ? t.targets : [t.oe, t.ne]).filter(Boolean);
       targets = targets.filter((d, i) => i === 0 || d !== targets[i - 1]);  // drop consecutive dups
-      const log = Array.isArray(t.log) ? t.log.filter((e) => e && e.text).map((e) => ({ at: e.at || null, kind: e.kind || 'note', text: String(e.text).slice(0, 500) })) : [];
+      const log = Array.isArray(t.log) ? t.log.filter((e) => e && e.text && e.kind !== 'push').map((e) => ({ at: e.at || null, kind: 'note', text: String(e.text).slice(0, 500) })) : [];   // notes only (drop old auto "Moved to…" entries)
       let setAt = Array.isArray(t.setAt) ? t.setAt.slice() : [];   // when each target was entered; align to targets (newest line up)
       if (setAt.length > targets.length) setAt = setAt.slice(setAt.length - targets.length);
       else while (setAt.length < targets.length) setAt.unshift(null);
