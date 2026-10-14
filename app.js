@@ -45,6 +45,7 @@ const fmtShort = (d) => MON[d.getMonth()] + ' ' + d.getDate();
 // last = current target, the ones between = successive pushes. oe/ne are kept in
 // sync for back-compat with older clients, but `targets` is the source of truth.
 function targetsOf(t) { const a = (t.targets && t.targets.length) ? t.targets : [t.oe, t.ne].filter(Boolean); return a.filter((d, i) => i === 0 || d !== a[i - 1]); }
+function setAtOf(t) { return Array.isArray(t.setAt) ? t.setAt : []; }   // when each target was entered, aligned to targetsOf(t)
 function origEndISO(t) { const a = targetsOf(t); return a[0] || null; }
 function curEndISO(t) { const a = targetsOf(t); return a[a.length - 1] || null; }
 function pushesOf(t) { return targetsOf(t).slice(1, -1); }  // intermediate pushes only
@@ -213,12 +214,15 @@ function buildDetail(t) {
   const d = el('div', 'tdetail'); d.onclick = (e) => e.stopPropagation();
   const inner = el('div', 'td-inner');
   const feed = el('div', 'td-feed');
-  const log = (t.log || []).slice().reverse();   // newest first
-  if (!log.length) feed.appendChild(el('div', 'td-empty', 'No updates yet — add where this stands or the next step below. Pushing a date also logs here automatically.'));
-  log.forEach((e) => {
+  const full = t.log || [];
+  if (!full.length) feed.appendChild(el('div', 'td-empty', 'No updates yet — add where this stands or the next step below. Pushing a date also logs here automatically.'));
+  full.map((e, i) => ({ e, i })).reverse().forEach(({ e, i }) => {   // newest first
     const row = el('div', 'le le-' + (e.kind || 'note'));
     row.appendChild(el('span', 'le-at mono', e.at ? fmtShort(parse(e.at)) : '—'));
     row.appendChild(el('span', 'le-txt', e.text));
+    const del = el('button', 'le-del', '×'); del.type = 'button'; del.title = 'Delete this update';
+    del.onclick = (ev) => { ev.stopPropagation(); const tk = state.tasks.find((x) => x.id === t.id); if (!tk) return; tk.log = (tk.log || []).filter((_, k) => k !== i); Sound.delete(); commit('Update deleted', { type: 'upsertTask', task: { ...tk } }); };
+    row.appendChild(del);
     feed.appendChild(row);
   });
   inner.appendChild(feed);
@@ -264,26 +268,30 @@ function renderHead(pushCols) {
 function buildDateCells(t, pushCols) {
   const cells = [];
   const tg = targetsOf(t);
+  const sa = setAtOf(t);
   const uns = isUnscheduled(t);
   const orig = tg[0] ? parse(tg[0]) : null;
   const cur = tg[tg.length - 1] ? parse(tg[tg.length - 1]) : null;
   const inter = tg.slice(1, -1);
-  cells.push(el('div', 'dcell mono oe', orig && !uns ? fmtShort(orig) : '—'));
+  const stamp = (cell, idx) => { const s = sa[idx]; if (s) cell.appendChild(el('span', 'seton', 'set ' + fmtShort(parse(s)))); };
+  cells.push(el('div', 'dcell mono oe', orig && !uns ? fmtShort(orig) : '—'));   // Original: baseline, no "set" stamp
   const shown = inter.slice(-pushCols);
   const blanks = pushCols - shown.length;
   const hiddenOlder = inter.length - shown.length;
   for (let j = 0; j < pushCols; j++) {
     if (j < blanks) { cells.push(el('div', 'dcell')); continue; }
-    const d = shown[j - blanks];
-    const cell = el('div', 'dcell mono push');
-    if (j === blanks && hiddenOlder > 0) { const dots = el('span', 'pmore', '…'); dots.title = inter.map((x) => fmtShort(parse(x))).join(' → '); cell.appendChild(dots); }
-    cell.appendChild(el('span', 'pd', fmtShort(parse(d))));
+    const k = j - blanks, d = shown[k], tgIdx = 1 + hiddenOlder + k;
+    const cell = el('div', 'dcell push');
+    const dval = el('div', 'dval');
+    if (j === blanks && hiddenOlder > 0) { const dots = el('span', 'pmore', '…'); dots.title = inter.map((x) => fmtShort(parse(x))).join(' → '); dval.appendChild(dots); }
+    dval.appendChild(el('span', 'pd mono', fmtShort(parse(d))));
+    cell.appendChild(dval); stamp(cell, tgIdx);
     cells.push(cell);
   }
   let curCell;
   if (t.status === 'inProgress') curCell = el('div', 'dcell ne prog', 'In progress');
   else if (uns) curCell = el('div', 'dcell ne tbdv', 'TBD');
-  else curCell = el('div', 'dcell mono ne', cur ? fmtShort(cur) : '—');
+  else { curCell = el('div', 'dcell ne'); const dv = el('div', 'dval'); dv.appendChild(el('span', 'pd mono', cur ? fmtShort(cur) : '—')); curCell.appendChild(dv); stamp(curCell, tg.length - 1); }
   cells.push(curCell);
   const slip = slipDays(t);
   const slipCell = el('div', 'dcell slip');
@@ -313,6 +321,9 @@ function openPushPopover(t, anchor) {
     const tk = state.tasks.find((x) => x.id === t.id); if (!tk) { closePushPopover(); return; }
     const tg = targetsOf(tk).slice(); tg.push(v);
     tk.targets = tg; tk.oe = tg[0]; tk.ne = tg[tg.length - 1];
+    const oldLen = tg.length - 1; let base = oldLen > 0 ? setAtOf(tk).slice(-oldLen) : [];   // align prior set-dates, then stamp the new one today
+    while (base.length < oldLen) base.unshift(null);
+    tk.setAt = [...base, todayISO];
     tk.log = [...(tk.log || []), { at: todayISO, kind: 'push', text: 'Moved to ' + fmtShort(parse(v)) }];
     Sound.add(); commit('Pushed “' + tk.name + '” to ' + fmtShort(parse(v)), { type: 'upsertTask', task: { ...tk } });
     closePushPopover();
@@ -487,7 +498,9 @@ function openTaskEditor(taskId, presetCat) {
     if (!name) { err.textContent = 'Please enter a task name.'; fName.focus(); return; }
     const dur = clamp(parseInt(fDur.value, 10) || 0, 0, 999);
     let tg = targets.filter(Boolean); tg = tg.filter((d, i) => i === 0 || d !== tg[i - 1]);
-    const patch = { name, cat: sel.value, targets: tg, oe: tg[0] || null, ne: tg[tg.length - 1] || null, dur, status: curStatus, note: fNote.value.trim() };
+    const oldT = targetsOf(t), oldSA = setAtOf(t);   // carry "set on" for kept dates; stamp newly-entered ones today
+    const setAt = tg.map((d) => { const oi = oldT.indexOf(d); return oi >= 0 ? (oldSA[oi] ?? null) : todayISO; });
+    const patch = { name, cat: sel.value, targets: tg, setAt, oe: tg[0] || null, ne: tg[tg.length - 1] || null, dur, status: curStatus, note: fNote.value.trim() };
     if (editing) { Object.assign(t, patch); Sound.save(); commit('Task updated', { type: 'upsertTask', task: { ...t } }); }
     else { const nt = { id: uid('k'), ...patch }; state.tasks.push(nt); Sound.add(); commit('Task added', { type: 'upsertTask', task: { ...nt } }); }
     closeModal();
@@ -591,7 +604,10 @@ function normalize(p) {
       let targets = (Array.isArray(t.targets) ? t.targets : [t.oe, t.ne]).filter(Boolean);
       targets = targets.filter((d, i) => i === 0 || d !== targets[i - 1]);  // drop consecutive dups
       const log = Array.isArray(t.log) ? t.log.filter((e) => e && e.text).map((e) => ({ at: e.at || null, kind: e.kind || 'note', text: String(e.text).slice(0, 500) })) : [];
-      return { id: t.id || uid('k'), cat: t.cat, name: t.name || '', targets, oe: targets[0] || null, ne: targets[targets.length - 1] || null, dur: t.dur == null ? 1 : t.dur, status: t.status || 'normal', tag: t.tag || '', striped: !!t.striped, note: t.note || '', log };
+      let setAt = Array.isArray(t.setAt) ? t.setAt.slice() : [];   // when each target was entered; align to targets (newest line up)
+      if (setAt.length > targets.length) setAt = setAt.slice(setAt.length - targets.length);
+      else while (setAt.length < targets.length) setAt.unshift(null);
+      return { id: t.id || uid('k'), cat: t.cat, name: t.name || '', targets, setAt, oe: targets[0] || null, ne: targets[targets.length - 1] || null, dur: t.dur == null ? 1 : t.dur, status: t.status || 'normal', tag: t.tag || '', striped: !!t.striped, note: t.note || '', log };
     }),
   };
 }
