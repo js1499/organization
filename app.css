@@ -7,6 +7,7 @@
   --lw:calc(var(--name-w) + var(--dcol) * (2 + var(--extra-cols, 0)) + var(--scol));  /* label column = title + date columns */
   --dcol:56px;           /* width of each date column                          */
   --scol:46px;           /* width of the slip column                           */
+  --stw:162px;           /* width of the status column (pill + countdown)      */
   --head-h:60px;         /* chart header height (both columns)                 */
   --grp-h:40px;          /* business group row height                          */
   --row-h:30px;          /* task row height                                    */
@@ -93,7 +94,7 @@ body{
 .hidden-note a:hover{ text-decoration:underline; }
 
 /* ---- Chart shell -------------------------------------------------------- */
-.card{ background:var(--card); border:1px solid var(--line2); border-radius:var(--r); box-shadow:var(--shadow-md); overflow:hidden; }
+.card{ background:var(--card); border:1px solid var(--line2); border-radius:var(--r); box-shadow:var(--shadow-md); }
 .gantt{ display:grid; grid-template-columns:var(--lw) 1fr; }
 .gcol-labels{ border-right:1px solid var(--line2); min-width:0; }
 .gcol-time{ overflow-x:auto; position:relative; scrollbar-width:thin; }
@@ -289,6 +290,41 @@ body{
 #toast.on{ opacity:1; transform:translateX(-50%) translateY(0); }
 
 @keyframes livePulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+
+/* ---- Tracker: status column, latest-update column, expandable log -------- */
+.lab-head{ border-radius:var(--r) var(--r) 0 0; }
+.tlab{ cursor:pointer; }
+.caret{ flex:0 0 auto; width:11px; font-size:9px; color:var(--faint); transition:transform .15s; margin-right:-3px; }
+.tlab.open .caret{ transform:rotate(90deg); color:var(--muted); }
+.lab-head .h-upd{ display:flex; align-items:flex-end; padding:0 12px 8px; font-size:9px; letter-spacing:.03em; text-transform:uppercase; color:var(--faint); font-weight:700; border-left:1px solid var(--line2); }
+.tlab .dcell.status{ justify-content:flex-start; gap:7px; padding:0 8px 0 10px; border-left:1px solid var(--line2); overflow:hidden; }
+.dcell.status .pill{ font-size:9.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; padding:2px 7px; border-radius:6px; white-space:nowrap; flex:0 0 auto; }
+.st-late{ color:#fff; background:#CE2C3B; border:1px solid #CE2C3B; }
+.st-soon{ color:#92400E; background:#FCEFCF; border:1px solid #EBC878; }
+.st-ok{ color:#0E7A52; background:#DBF5E9; border:1px solid #9BE0C2; }
+.st-prog{ color:#1F6FB2; background:#E1EFFA; border:1px solid #ACD2EE; }
+.st-done{ color:#64748B; background:#EEF2F7; border:1px solid #D3DCE7; }
+.st-tbd{ color:#94A3B8; background:#EEF2F7; border:1px dashed #D3DCE7; }
+.dcell.status .cd{ font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace; font-size:11px; font-weight:600; white-space:nowrap; }
+.dcell.status .cd.late{ color:#CE2C3B; } .dcell.status .cd.soon{ color:#B4700A; } .dcell.status .cd.ok, .dcell.status .cd.prog{ color:var(--muted); }
+.tlab .dcell.upd{ justify-content:flex-start; gap:8px; padding:0 12px; overflow:hidden; border-left:1px solid var(--line2); }
+.upd-txt{ font-size:12px; color:#1E293B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.upd-ago{ flex:0 0 auto; font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums; }
+.upd-add{ font-size:11.5px; color:var(--faint); font-style:italic; }
+.tlab:hover .upd-add{ color:var(--accent); }
+/* expanded detail panel (full-width under the row) */
+.tdetail{ cursor:default; background:#F6F9FC; border-bottom:1px solid var(--line); padding:13px 16px 15px 44px; animation:detailIn .15s var(--ease); }
+.td-inner{ max-width:780px; }
+.td-feed{ display:flex; flex-direction:column; gap:7px; margin-bottom:12px; }
+.le{ display:flex; gap:12px; align-items:baseline; font-size:12.5px; line-height:1.45; }
+.le-at{ flex:0 0 50px; font-size:10.5px; color:var(--faint); text-align:right; }
+.le-txt{ color:#1E293B; min-width:0; }
+.le-push .le-txt{ color:var(--muted); font-style:italic; }
+.td-empty{ font-size:12.5px; color:var(--faint); font-style:italic; margin-bottom:12px; max-width:62ch; }
+.td-add{ display:flex; gap:8px; }
+.td-add input{ flex:1 1 auto; min-width:0; padding:8px 11px; font-size:13px; border:1px solid var(--line2); border-radius:9px; background:var(--card); color:var(--ink); }
+.td-add input:focus{ outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(31,111,178,.14); }
+@keyframes detailIn{ from{ opacity:0; transform:translateY(-3px); } to{ opacity:1; transform:none; } }
 
 /* ---- Responsive (screen only — must NOT apply to print, or a portrait page
    under 820px would collapse the layout and drop the date columns) --------- */
