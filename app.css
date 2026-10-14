@@ -177,6 +177,8 @@ body{
 .target-row{ display:flex; align-items:center; gap:9px; }
 .target-row .t-lbl{ flex:0 0 58px; font-size:11px; font-weight:600; color:var(--muted); }
 .target-row input{ flex:1 1 auto; min-width:0; padding:8px 10px; font-size:14px; border:1px solid var(--line2); border-radius:8px; }
+.target-row .t-set{ flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--faint); }
+.target-row .seton-input{ flex:0 0 130px; color:var(--accent); }
 .target-row .t-rm{ flex:0 0 auto; border:0; background:transparent; color:var(--faint); font-size:16px; line-height:1; cursor:pointer; padding:2px 7px; border-radius:6px; }
 .target-row .t-rm:hover{ color:#fff; background:#d64545; }
 .tl-empty{ font-size:12px; color:var(--faint); font-style:italic; padding:2px 0; }

@@ -456,6 +456,9 @@ function openTaskEditor(taskId, presetCat) {
   body.appendChild(field('Business', sel));
 
   let targets = targetsOf(t).slice();
+  let setAts = setAtOf(t).slice();
+  while (setAts.length < targets.length) setAts.unshift(null);                 // align set-dates to targets
+  setAts = setAts.slice(setAts.length - targets.length);
   const tlist = el('div', 'target-list');
   function renderTargets() {
     tlist.innerHTML = '';
@@ -463,14 +466,18 @@ function openTaskEditor(taskId, presetCat) {
     targets.forEach((d, i) => {
       const row = el('div', 'target-row');
       row.appendChild(el('span', 't-lbl', i === 0 ? 'Original' : (i === targets.length - 1 ? 'Current' : 'Push ' + i)));
-      const di = input('date', d); di.onchange = () => { targets[i] = di.value; };
-      const rm = el('button', 't-rm', '×'); rm.type = 'button'; rm.title = 'Remove this date'; rm.onclick = () => { targets.splice(i, 1); renderTargets(); };
-      row.appendChild(di); row.appendChild(rm); tlist.appendChild(row);
+      const di = input('date', d); di.title = 'Target date'; di.onchange = () => { targets[i] = di.value; };
+      row.appendChild(di);
+      row.appendChild(el('span', 't-set', 'set'));
+      const si = input('date', setAts[i] || ''); si.className = 'seton-input'; si.title = 'When this date was set (leave blank for none)'; si.onchange = () => { setAts[i] = si.value || null; };
+      row.appendChild(si);
+      const rm = el('button', 't-rm', '×'); rm.type = 'button'; rm.title = 'Remove this date'; rm.onclick = () => { targets.splice(i, 1); setAts.splice(i, 1); renderTargets(); };
+      row.appendChild(rm); tlist.appendChild(row);
     });
   }
   renderTargets();
   const addT = el('button', 'btn ghost sm', '+ Push to a new date'); addT.type = 'button';
-  addT.onclick = () => { const last = targets[targets.length - 1]; targets.push(last ? isoAdd(last, 7) : todayISO); renderTargets(); };
+  addT.onclick = () => { const last = targets[targets.length - 1]; targets.push(last ? isoAdd(last, 7) : todayISO); setAts.push(todayISO); renderTargets(); };
   const tWrap = el('div'); tWrap.appendChild(tlist); tWrap.appendChild(addT);
   body.appendChild(field('Target dates  ·  original → pushes → current', tWrap));
   const fDur = input('number', t.dur != null ? t.dur : 1, { min: '0', max: '999', step: '1' });
@@ -497,9 +504,10 @@ function openTaskEditor(taskId, presetCat) {
     const name = fName.value.trim();
     if (!name) { err.textContent = 'Please enter a task name.'; fName.focus(); return; }
     const dur = clamp(parseInt(fDur.value, 10) || 0, 0, 999);
-    let tg = targets.filter(Boolean); tg = tg.filter((d, i) => i === 0 || d !== tg[i - 1]);
-    const oldT = targetsOf(t), oldSA = setAtOf(t);   // carry "set on" for kept dates; stamp newly-entered ones today
-    const setAt = tg.map((d) => { const oi = oldT.indexOf(d); return oi >= 0 ? (oldSA[oi] ?? null) : todayISO; });
+    // pair each target with its set-date, drop empty rows, dedupe consecutive — keeping both aligned
+    let pairs = targets.map((d, i) => ({ d, s: setAts[i] || null })).filter((p) => p.d);
+    pairs = pairs.filter((p, i) => i === 0 || p.d !== pairs[i - 1].d);
+    const tg = pairs.map((p) => p.d), setAt = pairs.map((p) => p.s);
     const patch = { name, cat: sel.value, targets: tg, setAt, oe: tg[0] || null, ne: tg[tg.length - 1] || null, dur, status: curStatus, note: fNote.value.trim() };
     if (editing) { Object.assign(t, patch); Sound.save(); commit('Task updated', { type: 'upsertTask', task: { ...t } }); }
     else { const nt = { id: uid('k'), ...patch }; state.tasks.push(nt); Sound.add(); commit('Task added', { type: 'upsertTask', task: { ...nt } }); }
@@ -507,7 +515,7 @@ function openTaskEditor(taskId, presetCat) {
   };
   right.appendChild(save); foot.appendChild(right); wrap.appendChild(foot);
 
-  openModal(wrap);
+  openModal(wrap, true);
   setTimeout(() => fName.focus(), 60);
 }
 
